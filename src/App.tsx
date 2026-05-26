@@ -106,6 +106,9 @@ export default function App() {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     return localStorage.getItem('dohyun_access_token');
   });
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    return localStorage.getItem('dohyun_user_email');
+  });
   const [authError, setAuthError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
@@ -245,6 +248,26 @@ export default function App() {
       // Try Google Sheets API OAuth fetch if we have an active access token
       if (accessToken) {
         try {
+          // Fetch user info first to show which Gmail is logged in
+          let email = userEmail;
+          if (!email) {
+            try {
+              const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              if (infoRes.ok) {
+                const info = await infoRes.json();
+                email = info.email;
+                if (email) {
+                  localStorage.setItem('dohyun_user_email', email);
+                  setUserEmail(email);
+                }
+              }
+            } catch (e) {
+              console.log('Không thể lấy thông tin email user:', e);
+            }
+          }
+
           // Step 1: Get spreadsheet metadata to find available sheet names
           const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
           const metadataRes = await fetch(metadataUrl, {
@@ -332,7 +355,7 @@ export default function App() {
       if ((window as any).google && (window as any).google.accounts) {
         tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+          scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/userinfo.email openid',
           callback: (response: any) => {
             if (response.error) {
               setAuthError(`Lỗi xác thực: ${response.error}`);
@@ -369,7 +392,9 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('dohyun_access_token');
+    localStorage.removeItem('dohyun_user_email');
     setAccessToken(null);
+    setUserEmail(null);
     setIsDemoMode(false);
   };
 
@@ -607,6 +632,13 @@ export default function App() {
                   <span>Không thể tải dữ liệu</span>
                 </div>
                 <p style={{ fontSize: '12px', marginTop: '6px', lineHeight: 1.4 }}>{authError}</p>
+              </div>
+            )}
+
+            {accessToken && userEmail && (
+              <div className="alert alert-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '12px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '10px', borderRadius: '6px' }}>
+                <span style={{ opacity: 0.8 }}>Gmail đang kết nối:</span>
+                <strong>{userEmail}</strong>
               </div>
             )}
 
