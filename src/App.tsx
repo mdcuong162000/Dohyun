@@ -602,10 +602,22 @@ export default function App() {
                 <Lock size={16} /> Đăng Nhập Với Google
               </button>
               
+              {accessToken && (
+                <button 
+                  type="button" 
+                  className="btn btn-secondary btn-logout-switch" 
+                  onClick={handleLogout}
+                  style={{ width: '100%', marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <LogOut size={16} /> Đăng Xuất / Đổi Tài Khoản Gmail
+                </button>
+              )}
+              
               <button 
                 type="button" 
                 className="btn btn-secondary btn-demo" 
                 onClick={handleEnterDemo}
+                style={{ marginTop: accessToken ? '8px' : '0px' }}
               >
                 <Play size={16} /> Xem Dữ Liệu Mẫu (Offline Demo)
               </button>
