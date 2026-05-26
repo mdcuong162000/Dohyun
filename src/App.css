@@ -349,9 +349,15 @@ body {
   padding: 20px 24px; box-shadow: var(--shadow-card);
 }
 .filter-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
 }
-@media (min-width: 1280px) { .filter-grid { grid-template-columns: repeat(6, 1fr); } }
+@media (min-width: 1024px) {
+  .filter-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 
 .filter-group { display: flex; flex-direction: column; gap: 7px; }
 .filter-group label {
@@ -388,6 +394,13 @@ option { background: #0d1428; }
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+}
+@media (max-width: 768px) {
+  .filter-chips-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 
 .chips-label {
@@ -451,7 +464,7 @@ option { background: #0d1428; }
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .kpi-grid-top { grid-template-columns: repeat(4, 1fr); }
 }
 
@@ -532,7 +545,7 @@ option { background: #0d1428; }
 .kpi-hero-value.c-bad     { color: var(--rose);    }
 
 .kpi-hero-sub {
-  font-size: 12px; color: var(--text-3);
+  font-size: 13px; color: rgba(240, 244, 255, 0.75);
   display: flex; align-items: center; gap: 6px;
 }
 .sub-tag {
@@ -548,11 +561,8 @@ option { background: #0d1428; }
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
-}
-@media (max-width: 768px) {
-  .kpi-grid-funnel { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Funnel card (smaller, secondary KPIs) */
@@ -577,7 +587,8 @@ option { background: #0d1428; }
   font-family: var(--font-head); font-weight: 700; font-size: 21px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.kpi-funnel-sub { font-size: 11px; color: var(--text-3); }
+.kpi-funnel-sub { font-size: 13px; color: rgba(240, 244, 255, 0.7); font-weight: 500; }
+.kpi-funnel-sub strong { color: rgba(240, 244, 255, 0.9); }
 
 
 /* ── SECTION TITLE ────────────────────────────────────────── */
@@ -628,28 +639,193 @@ option { background: #0d1428; }
 
 /* Ranking list inside chart cards */
 .ranking-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* Service Ranking Styles */
 .ranking-item {
-  display: flex; align-items: center; gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.ranking-item:last-child {
+  border-bottom: none;
 }
 .rank-num {
-  width: 24px; height: 24px; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
 }
-.rank-1 { background: var(--amber-dim); color: var(--amber); }
-.rank-2 { background: rgba(203,213,225,0.1); color: #94a3b8; }
-.rank-3 { background: rgba(180,100,60,0.15); color: #c8956c; }
-.rank-other { background: var(--bg-glass); color: var(--text-3); }
-
-.rank-bar-wrap { flex: 1; }
+.rank-num.rank-1 {
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  box-shadow: 0 2px 6px rgba(251, 191, 36, 0.3);
+}
+.rank-num.rank-2 {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+.rank-num.rank-3 {
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow: 0 2px 6px rgba(167, 139, 250, 0.3);
+}
+.rank-num.rank-other {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.rank-bar-wrap {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .rank-label {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
 }
-.rank-name { font-size: 13px; font-weight: 500; color: var(--text-1); }
-.rank-value { font-size: 12px; font-weight: 600; font-family: var(--font-head); }
-.rank-bar-bg { height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
-.rank-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+.rank-name {
+  color: var(--text-1);
+  font-weight: 500;
+}
+.rank-value {
+  font-weight: 600;
+}
+.rank-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.rank-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── BRANCH RANKING CARDS (Redesigned matching .kpi-funnel) ── */
+.branch-ranking-card {
+  background: rgba(13, 20, 38, 0.4);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.branch-ranking-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+.branch-ranking-card.active-branch {
+  border-color: var(--blue);
+  background: rgba(79, 156, 249, 0.08);
+  box-shadow: 0 0 16px rgba(79, 156, 249, 0.15);
+}
+
+.rank-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.rank-badge.rank-1 {
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+}
+
+.rank-badge.rank-2 {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.rank-badge.rank-3 {
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.25);
+}
+
+.rank-badge.rank-other {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.branch-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.branch-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.branch-card-name {
+  font-size: 13px;
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.view-detail-link {
+  font-size: 12px;
+  color: var(--blue-light, #60a5fa);
+  opacity: 0.8;
+  transition: var(--transition);
+  font-weight: 600;
+}
+
+.branch-ranking-card:hover .view-detail-link {
+  opacity: 1;
+}
+
+.branch-card-value {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 19px;
+  color: var(--emerald);
+  line-height: 1.2;
+}
+
+.branch-card-sub {
+  font-size: 11px;
+  color: var(--text-2);
+  display: flex;
+  gap: 6px;
+  opacity: 0.8;
+}
+
+.branch-card-sub strong {
+  color: var(--text-1);
+  font-weight: 500;
+}
 
 
 /* Funnel visual */
@@ -1119,10 +1295,20 @@ option { background: #0d1428; }
 }
 
 /* ── RESPONSIVE DATE PICKER ───────────────────────────────────────── */
-@media (max-width: 768px) {
+@media (min-width: 901px) and (max-width: 1200px) {
   .datepicker-popover {
-    width: calc(100vw - 24px);
-    right: -12px;
+    right: auto;
+    left: 50%;
+    margin-left: -380px;
+  }
+}
+
+@media (max-width: 900px) {
+  .datepicker-popover {
+    width: calc(100vw - 32px);
+    right: auto;
+    left: 50%;
+    margin-left: calc(-50vw + 16px);
     max-height: 85vh;
     overflow-y: auto;
   }
@@ -1181,7 +1367,7 @@ option { background: #0d1428; }
   }
 }
 
-/* ── BRANCH DRAWER (Layer 2 & Layer 3) ───────────────── */
+/* ── BRANCH DRAWER (Layer 2 & Layer 3 - Redesigned as Modal) ───────────────── */
 .branch-drawer-overlay {
   position: fixed;
   top: 0;
@@ -1192,24 +1378,40 @@ option { background: #0d1428; }
   backdrop-filter: blur(8px);
   z-index: 2000;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
 .branch-drawer {
-  width: 780px;
-  max-width: 95%;
-  height: 100%;
+  width: 80%;
+  height: 80%;
+  max-width: 1440px;
+  max-height: 85vh;
   background: #080d1a;
-  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  animation: drawerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modalScaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
 }
 
-@keyframes drawerSlideIn {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+@keyframes modalScaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .branch-drawer-overlay {
+    padding: 12px;
+  }
+  .branch-drawer {
+    width: 95%;
+    height: 90%;
+    max-height: 90vh;
+  }
 }
 
 .drawer-header {
@@ -1336,11 +1538,13 @@ option { background: #0d1428; }
 .fill-blue { background: var(--blue); }
 .fill-amber { background: var(--amber); }
 .fill-violet { background: var(--violet); }
+.fill-rose { background: var(--rose); }
 
 .c-emerald { color: var(--emerald); }
 .c-blue { color: var(--blue); }
 .c-amber { color: var(--amber); }
 .c-violet { color: var(--violet); }
+.c-rose { color: var(--rose); }
 
 .progress-card-info {
   display: flex;
@@ -1376,40 +1580,107 @@ option { background: #0d1428; }
 }
 
 
-/* Clickable Branch style */
-.clickable-branch-row {
-  border-radius: 10px;
-  padding: 10px;
-  margin-bottom: 6px;
-}
 
-.clickable-branch-row:hover {
-  background: rgba(255, 255, 255, 0.04);
-  transform: translateX(4px);
-}
-
-.clickable-branch-row.active-branch {
-  background: rgba(59, 130, 246, 0.1);
-  border-left: 3px solid var(--blue);
-}
-
-.view-detail-tag {
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.clickable-branch-row:hover .view-detail-tag {
-  background: var(--blue);
-  color: #fff;
-  opacity: 1;
-}
 
 @media (max-width: 640px) {
   .progress-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── ZOOM & RESPONSIVE TYPOGRAPHY OPTIMIZATIONS ── */
+@media (max-width: 1400px) {
+  .kpi-hero-value {
+    font-size: 24px;
+  }
+  .branch-card-value {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .kpi-funnel-value {
+    font-size: 18px;
+  }
+  .branch-card-value {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-hero-value {
+    font-size: 20px;
+  }
+  .kpi-funnel-value {
+    font-size: 15px;
+  }
+}
+
+/* ── SERVICE BREAKDOWN EXPANSE STYLES ── */
+.service-breakdown-row td {
+  background: rgba(13, 20, 40, 0.4) !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.service-breakdown-wrapper {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  margin: 10px 20px 20px 20px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  animation: slideDownBreakdown 0.2s ease-out;
+}
+
+@keyframes slideDownBreakdown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.service-breakdown-header {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.service-breakdown-subtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.service-breakdown-subtable th {
+  color: var(--text-3) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  padding: 6px 10px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.01) !important;
+}
+
+.service-breakdown-subtable td {
+  padding: 8px 10px !important;
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+}
+
+.service-breakdown-subtable tr:last-child td {
+  border-bottom: none !important;
+}
+
+.expanded-row-active td {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-bottom: none !important;
 }
 
 

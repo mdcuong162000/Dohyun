@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { 
   DollarSign, 
   Users, 
@@ -79,7 +79,63 @@ const BRANCH_TARGETS: Record<string, Record<string, { revenue: number, adsSpend:
   }
 };
 
-const getBranchTarget = (branchName: string, dateStr: string) => {
+function getDaysList(start: string, end: string): string[] {
+  if (!start || !end) return [];
+  const days: string[] = [];
+  const [startY, startM, startD] = start.split('-').map(Number);
+  const [endY, endM, endD] = end.split('-').map(Number);
+  
+  const curr = new Date(startY, startM - 1, startD);
+  const last = new Date(endY, endM - 1, endD);
+  
+  while (curr <= last) {
+    const y = curr.getFullYear();
+    const m = String(curr.getMonth() + 1).padStart(2, '0');
+    const d = String(curr.getDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${d}`);
+    curr.setDate(curr.getDate() + 1);
+  }
+  return days;
+}
+
+const getBranchTarget = (branchName: string, dateStr: string, startDate?: string, endDate?: string) => {
+  if (startDate && endDate) {
+    const days = getDaysList(startDate, endDate);
+    let totalRevenue = 0;
+    let totalAdsSpend = 0;
+    let totalLeads = 0;
+    let totalShowups = 0;
+    
+    days.forEach(day => {
+      const monthKey = day.substring(0, 7);
+      const [yStr, mStr] = monthKey.split('-');
+      const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
+      
+      let monthTarget = BRANCH_TARGETS[monthKey]?.[branchName];
+      if (!monthTarget) {
+        const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
+          'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
+          'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
+          'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
+          'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
+        };
+        monthTarget = defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
+      }
+      
+      totalRevenue += monthTarget.revenue / daysCount;
+      totalAdsSpend += monthTarget.adsSpend / daysCount;
+      totalLeads += monthTarget.leads / daysCount;
+      totalShowups += monthTarget.showups / daysCount;
+    });
+    
+    return {
+      revenue: Math.round(totalRevenue),
+      adsSpend: Math.round(totalAdsSpend),
+      leads: Math.round(totalLeads),
+      showups: Math.round(totalShowups)
+    };
+  }
+
   const monthKey = dateStr || '2026-05';
   if (BRANCH_TARGETS[monthKey] && BRANCH_TARGETS[monthKey][branchName]) {
     return BRANCH_TARGETS[monthKey][branchName];
@@ -126,7 +182,36 @@ const OPERATOR_TARGETS: Record<string, Record<string, Record<string, { adsSpend:
   }
 };
 
-const getOperatorTarget = (opName: string, branchName: string, dateStr: string) => {
+const getOperatorTarget = (opName: string, branchName: string, dateStr: string, startDate?: string, endDate?: string) => {
+  if (startDate && endDate) {
+    const days = getDaysList(startDate, endDate);
+    let totalRevenue = 0;
+    let totalAdsSpend = 0;
+    let totalLeads = 0;
+    
+    days.forEach(day => {
+      const monthKey = day.substring(0, 7);
+      const [yStr, mStr] = monthKey.split('-');
+      const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
+      
+      const monthMap = OPERATOR_TARGETS[monthKey] || OPERATOR_TARGETS['2026-05'];
+      const branchMap = monthMap[branchName] || {};
+      const opTarget = branchMap[opName.trim().toUpperCase()];
+      
+      if (opTarget) {
+        totalRevenue += opTarget.revenue / daysCount;
+        totalAdsSpend += opTarget.adsSpend / daysCount;
+        totalLeads += opTarget.leads / daysCount;
+      }
+    });
+    
+    return {
+      revenue: Math.round(totalRevenue),
+      adsSpend: Math.round(totalAdsSpend),
+      leads: Math.round(totalLeads)
+    };
+  }
+
   const monthKey = dateStr || '2026-05';
   const monthMap = OPERATOR_TARGETS[monthKey] || OPERATOR_TARGETS['2026-05'];
   const branchMap = monthMap[branchName] || {};
@@ -557,6 +642,11 @@ export default function App() {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const [selectedDetailBranch, setSelectedDetailBranch] = useState<string | null>(null);
+  const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
+
+  useEffect(() => {
+    setExpandedOperator(null);
+  }, [selectedDetailBranch]);
   
   // Left calendar month state (Date object pointing to the first day of that month)
   const [leftCalendarMonth, setLeftCalendarMonth] = useState<Date>(() => {
@@ -1057,7 +1147,6 @@ export default function App() {
     return Object.values(grouped).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
   }, [filteredData]);
 
-  const maxBranchRevenue = branchRanking[0]?.revenue || 1;
   const maxServiceRevenue = serviceRanking[0]?.revenue || 1;
 
   // avg ads ratio
@@ -1435,8 +1524,34 @@ export default function App() {
       ══════════════════════════════════════════ */}
       {records.length > 0 && (
         <>
-          <p className="section-title">Xu Hướng & Hiệu Suất Chi Nhánh</p>
-          <div className="charts-row">
+          <p className="section-title">Hiệu Suất Chi Nhánh</p>
+          <section className="kpi-grid-funnel" style={{ marginTop: '8px', marginBottom: '24px' }}>
+            {branchRanking.map((item, i) => (
+              <div 
+                key={item.name} 
+                className={`kpi-funnel clickable-branch-row ${selectedDetailBranch === item.name ? 'active-branch' : ''}`}
+                onClick={() => setSelectedDetailBranch(selectedDetailBranch === item.name ? null : item.name)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className={`kpi-funnel-icon ${i === 0 ? 'icon-amber' : i === 1 ? 'icon-blue' : i === 2 ? 'icon-violet' : 'icon-cyan'}`}>
+                  <span style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: 16 }}>{i + 1}</span>
+                </div>
+                <div className="kpi-funnel-body">
+                  <span className="kpi-funnel-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{item.name}</strong>
+                    <span className="view-detail-link">chi tiết →</span>
+                  </span>
+                  <span className="kpi-funnel-value c-emerald">{formatCurrency(item.revenue)}</span>
+                  <span className="kpi-funnel-sub">
+                    Ads: <strong>{formatCurrency(item.adsSpend)}</strong> · SĐT: <strong>{formatNumber(item.leads)}</strong>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          <p className="section-title">Xu Hướng Doanh Số & Chi Phí</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
             {/* Trend Chart */}
             <div className="chart-card">
               <div className="chart-header">
@@ -1444,7 +1559,7 @@ export default function App() {
                 <span className="chart-tag">Trend</span>
               </div>
               <div className="chart-body">
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={320}>
                   <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -1465,44 +1580,6 @@ export default function App() {
                     <Area name="Chi Tiêu Ads" type="monotone" dataKey="adsSpend" stroke="#4f9cf9" strokeWidth={2} fill="url(#gAds)" />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Branch Ranking */}
-            <div className="chart-card">
-              <div className="chart-header">
-                <h2 className="chart-title">Ranking Chi Nhánh</h2>
-                <span className="chart-tag">Doanh số</span>
-              </div>
-              <div className="chart-body" style={{ minHeight: 'auto', overflowY: 'auto' }}>
-                <div className="ranking-list">
-                  {branchRanking.map((item, i) => (
-                    <div 
-                      key={item.name} 
-                      className={`ranking-item clickable-branch-row ${selectedDetailBranch === item.name ? 'active-branch' : ''}`}
-                      onClick={() => setSelectedDetailBranch(selectedDetailBranch === item.name ? null : item.name)}
-                      style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                    >
-                      <div className={`rank-num ${i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other'}`}>
-                        {i + 1}
-                      </div>
-                      <div className="rank-bar-wrap" style={{ width: '100%' }}>
-                        <div className="rank-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span className="rank-name" style={{ fontWeight: 600 }}>
-                            {item.name} <span className="view-detail-tag" style={{ fontSize: 9, opacity: 0.6, marginLeft: 6 }}>chi tiết →</span>
-                          </span>
-                          <span className="rank-value" style={{ color: '#34d399', fontWeight: 700 }}>{formatCurrency(item.revenue)}</span>
-                        </div>
-                        <div className="rank-bar-bg">
-                          <div className="rank-bar-fill" style={{ width: `${(item.revenue / maxBranchRevenue) * 100}%`, background: i === 0 ? 'var(--amber)' : i === 1 ? 'var(--blue)' : 'var(--violet)' }} />
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3 }}>
-                          Ads: {formatCurrency(item.adsSpend)} · {item.leads} leads
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -1609,8 +1686,10 @@ export default function App() {
           return { adsSpend, leads, showups, revenue, records: branchRecords };
         })();
 
+        const actualStart = startDate || minDate;
+        const actualEnd = endDate || maxDate;
         const targetMonthStr = startDate ? startDate.substring(0, 7) : '2026-05';
-        const target = getBranchTarget(selectedDetailBranch, targetMonthStr);
+        const target = getBranchTarget(selectedDetailBranch, targetMonthStr, actualStart, actualEnd);
 
         const formatPercent = (val: number, base: number) => {
           if (!base) return '0.0%';
@@ -1670,10 +1749,10 @@ export default function App() {
                     <div className="progress-card">
                       <div className="progress-card-header">
                         <span className="card-lbl">Doanh Số</span>
-                        <span className="card-pct c-emerald">{formatPercent(real.revenue, target.revenue)}</span>
+                        <span className={`card-pct ${real.revenue >= target.revenue ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.revenue, target.revenue)}</span>
                       </div>
                       <div className="progress-card-bar">
-                        <div className="progress-bar-fill fill-emerald" style={{ width: getProgressWidth(real.revenue, target.revenue) }} />
+                        <div className={`progress-bar-fill ${real.revenue >= target.revenue ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.revenue, target.revenue) }} />
                       </div>
                       <div className="progress-card-info">
                         <span>Thực tế: <strong>{formatCurrency(real.revenue)}</strong></span>
@@ -1685,14 +1764,14 @@ export default function App() {
                     <div className="progress-card">
                       <div className="progress-card-header">
                         <span className="card-lbl">Chi Ads / Ngân Sách</span>
-                        <span className="card-pct c-blue">{formatPercent(real.adsSpend, target.adsSpend)}</span>
+                        <span className={`card-pct ${real.adsSpend > target.adsSpend ? 'c-rose' : 'c-emerald'}`}>{formatPercent(real.adsSpend, target.adsSpend)}</span>
                       </div>
                       <div className="progress-card-bar">
-                        <div className="progress-bar-fill fill-blue" style={{ width: getProgressWidth(real.adsSpend, target.adsSpend) }} />
+                        <div className={`progress-bar-fill ${real.adsSpend > target.adsSpend ? 'fill-rose' : 'fill-emerald'}`} style={{ width: getProgressWidth(real.adsSpend, target.adsSpend) }} />
                       </div>
                       <div className="progress-card-info">
                         <span>Thực tế: <strong>{formatCurrency(real.adsSpend)}</strong></span>
-                        <span>Mục tiêu: {formatCurrency(target.adsSpend)}</span>
+                        <span>Hạn mức: {formatCurrency(target.adsSpend)}</span>
                       </div>
                     </div>
 
@@ -1700,10 +1779,10 @@ export default function App() {
                     <div className="progress-card">
                       <div className="progress-card-header">
                         <span className="card-lbl">SĐT (Leads)</span>
-                        <span className="card-pct c-amber">{formatPercent(real.leads, target.leads)}</span>
+                        <span className={`card-pct ${real.leads >= target.leads ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.leads, target.leads)}</span>
                       </div>
                       <div className="progress-card-bar">
-                        <div className="progress-bar-fill fill-amber" style={{ width: getProgressWidth(real.leads, target.leads) }} />
+                        <div className={`progress-bar-fill ${real.leads >= target.leads ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.leads, target.leads) }} />
                       </div>
                       <div className="progress-card-info">
                         <span>Thực tế: <strong>{real.leads}</strong></span>
@@ -1715,10 +1794,10 @@ export default function App() {
                     <div className="progress-card">
                       <div className="progress-card-header">
                         <span className="card-lbl">Khách Đến (Showup)</span>
-                        <span className="card-pct c-violet">{formatPercent(real.showups, target.showups)}</span>
+                        <span className={`card-pct ${real.showups >= target.showups ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.showups, target.showups)}</span>
                       </div>
                       <div className="progress-card-bar">
-                        <div className="progress-bar-fill fill-violet" style={{ width: getProgressWidth(real.showups, target.showups) }} />
+                        <div className={`progress-bar-fill ${real.showups >= target.showups ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.showups, target.showups) }} />
                       </div>
                       <div className="progress-card-info">
                         <span>Thực tế: <strong>{real.showups}</strong></span>
@@ -1737,7 +1816,6 @@ export default function App() {
                         <tr>
                           <th>Nhân sự</th>
                           <th>Team</th>
-                          <th>Dịch vụ</th>
                           <th className="text-right">Chi Ads</th>
                           <th className="text-right">Leads</th>
                           <th className="text-right">Doanh số</th>
@@ -1745,53 +1823,113 @@ export default function App() {
                       </thead>
                       <tbody>
                         {staffData.length > 0 ? staffData.map((staff, idx) => {
-                          const target = getOperatorTarget(staff.name, selectedDetailBranch || '', targetMonthStr);
+                          const actualStart = startDate || minDate;
+                          const actualEnd = endDate || maxDate;
+                          const target = getOperatorTarget(staff.name, selectedDetailBranch || '', targetMonthStr, actualStart, actualEnd);
                           const formatProgress = (val: number, tgt: number) => {
                             if (!tgt) return '';
                             return ` (${((val / tgt) * 100).toFixed(0)}%)`;
                           };
+                          const isExpanded = expandedOperator === staff.name;
                           return (
-                            <tr key={idx}>
-                              <td><span className="operator-badge">{staff.name}</span></td>
-                              <td>{staff.team}</td>
-                              <td><span className="service-badge">{staff.service}</span></td>
-                              <td className="text-right">
-                                <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
-                                {target.adsSpend > 0 ? (
-                                  <div className="table-sub-info">
-                                    Mục tiêu: {formatCurrency(target.adsSpend)}
-                                    <span className="c-blue font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.adsSpend, target.adsSpend)}</span>
-                                  </div>
-                                ) : (
-                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
-                                )}
-                              </td>
-                              <td className="text-right">
-                                <div className="font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</div>
-                                {target.leads > 0 ? (
-                                  <div className="table-sub-info">
-                                    Mục tiêu: {target.leads}
-                                    <span className="c-amber font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.leads, target.leads)}</span>
-                                  </div>
-                                ) : (
-                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
-                                )}
-                              </td>
-                              <td className="text-right">
-                                <div className="font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</div>
-                                {target.revenue > 0 ? (
-                                  <div className="table-sub-info">
-                                    Mục tiêu: {formatCurrency(target.revenue)}
-                                    <span className="c-emerald font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.revenue, target.revenue)}</span>
-                                  </div>
-                                ) : (
-                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
-                                )}
-                              </td>
-                            </tr>
+                            <Fragment key={idx}>
+                              <tr 
+                                onClick={() => setExpandedOperator(isExpanded ? null : staff.name)}
+                                style={{ cursor: 'pointer' }}
+                                className={isExpanded ? 'expanded-row-active' : ''}
+                              >
+                                <td>
+                                  <span className="operator-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                    {staff.name}
+                                    <span style={{ fontSize: '10px', opacity: 0.5 }}>
+                                      {isExpanded ? '▼' : '▶'}
+                                    </span>
+                                  </span>
+                                </td>
+                                <td>{staff.team}</td>
+                                <td className="text-right">
+                                  <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
+                                  {target.adsSpend > 0 ? (
+                                    <div className="table-sub-info">
+                                      Hạn mức: {formatCurrency(target.adsSpend)}
+                                      <span className={`${staff.adsSpend > target.adsSpend ? 'c-rose' : 'c-emerald'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.adsSpend, target.adsSpend)}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có hạn mức</div>
+                                  )}
+                                </td>
+                                <td className="text-right">
+                                  <div className="font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</div>
+                                  {target.leads > 0 ? (
+                                    <div className="table-sub-info">
+                                      Mục tiêu: {target.leads}
+                                      <span className={`${staff.leads >= target.leads ? 'c-emerald' : 'c-rose'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.leads, target.leads)}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
+                                  )}
+                                </td>
+                                <td className="text-right">
+                                  <div className="font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</div>
+                                  {target.revenue > 0 ? (
+                                    <div className="table-sub-info">
+                                      Mục tiêu: {formatCurrency(target.revenue)}
+                                      <span className={`${staff.revenue >= target.revenue ? 'c-emerald' : 'c-rose'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.revenue, target.revenue)}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
+                                  )}
+                                </td>
+                              </tr>
+                              {isExpanded && (() => {
+                                const opRecords = real.records.filter(r => (r.operator || 'Chưa rõ') === staff.name);
+                                const serviceBreakdown: Record<string, { service: string, adsSpend: number, leads: number, revenue: number }> = {};
+                                opRecords.forEach(r => {
+                                  const srv = r.service || 'Khác';
+                                  if (!serviceBreakdown[srv]) {
+                                    serviceBreakdown[srv] = { service: srv, adsSpend: 0, leads: 0, revenue: 0 };
+                                  }
+                                  serviceBreakdown[srv].adsSpend += r.ads_spend;
+                                  serviceBreakdown[srv].leads += r.leads;
+                                  serviceBreakdown[srv].revenue += r.revenue;
+                                });
+                                const breakdownList = Object.values(serviceBreakdown).sort((a, b) => b.revenue - a.revenue);
+                                return (
+                                  <tr className="service-breakdown-row" onClick={e => e.stopPropagation()}>
+                                    <td colSpan={5}>
+                                      <div className="service-breakdown-wrapper">
+                                        <div className="service-breakdown-header">
+                                          Chi tiết từng dịch vụ của <strong>{staff.name}</strong>:
+                                        </div>
+                                        <table className="service-breakdown-subtable">
+                                          <thead>
+                                            <tr>
+                                              <th>Dịch vụ</th>
+                                              <th className="text-right">Chi Ads</th>
+                                              <th className="text-right">Leads</th>
+                                              <th className="text-right">Doanh số</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {breakdownList.map((srv, sIdx) => (
+                                              <tr key={sIdx}>
+                                                <td><span className="service-badge">{srv.service}</span></td>
+                                                <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
+                                                <td className="text-right font-semibold" style={{ color: 'var(--blue)' }}>{srv.leads}</td>
+                                                <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(srv.revenue)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })()}
+                            </Fragment>
                           );
                         }) : (
-                          <tr><td colSpan={6} className="table-empty">Không có nhân sự nào.</td></tr>
+                          <tr><td colSpan={5} className="table-empty">Không có nhân sự nào.</td></tr>
                         )}
                       </tbody>
                     </table>
