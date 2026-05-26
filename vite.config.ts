@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? '/dohyun-dashboard/' : '/',
+  base: process.env.NODE_ENV === 'production' ? '/Dohyun/' : '/',
   server: {
     port: 5173,
     host: true
