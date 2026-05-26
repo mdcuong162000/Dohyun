@@ -18,7 +18,9 @@ import {
   LogOut,
   AlertCircle,
   Play,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Target,
+  Zap
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -404,6 +406,9 @@ export default function App() {
   };
 
   // --- FILTER STATE ---
+  // --- VIEW MODE ---
+  const [activeView, setActiveView] = useState<'ceo' | 'team'>('ceo');
+
   const [selectedBranch, setSelectedBranch] = useState<string>('All');
   const [selectedTeam, setSelectedTeam] = useState<string>('All');
   const [selectedService, setSelectedService] = useState<string>('All');
@@ -513,18 +518,6 @@ export default function App() {
     return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
   }, [filteredData]);
 
-  const serviceChartData = useMemo(() => {
-    const grouped: { [service: string]: { name: string; adsSpend: number; revenue: number } } = {};
-    filteredData.forEach(r => {
-      const s = r.service || 'Khác';
-      if (!grouped[s]) {
-        grouped[s] = { name: s, adsSpend: 0, revenue: 0 };
-      }
-      grouped[s].adsSpend += r.ads_spend;
-      grouped[s].revenue += r.revenue;
-    });
-    return Object.values(grouped).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [filteredData]);
 
   const branchChartData = useMemo(() => {
     const grouped: { [branch: string]: { name: string; value: number } } = {};
@@ -603,6 +596,40 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN').format(val);
   };
 
+  // --- BRANCH RANKING ---
+  const branchRanking = useMemo(() => {
+    const grouped: { [b: string]: { name: string; revenue: number; adsSpend: number; leads: number } } = {};
+    filteredData.forEach(r => {
+      const b = r.branch || 'Khác';
+      if (!grouped[b]) grouped[b] = { name: b, revenue: 0, adsSpend: 0, leads: 0 };
+      grouped[b].revenue += r.revenue;
+      grouped[b].adsSpend += r.ads_spend;
+      grouped[b].leads += r.leads;
+    });
+    return Object.values(grouped).sort((a, b) => b.revenue - a.revenue);
+  }, [filteredData]);
+
+  const serviceRanking = useMemo(() => {
+    const grouped: { [s: string]: { name: string; revenue: number; leads: number } } = {};
+    filteredData.forEach(r => {
+      const s = r.service || 'Khác';
+      if (!grouped[s]) grouped[s] = { name: s, revenue: 0, leads: 0 };
+      grouped[s].revenue += r.revenue;
+      grouped[s].leads += r.leads;
+    });
+    return Object.values(grouped).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+  }, [filteredData]);
+
+  const maxBranchRevenue = branchRanking[0]?.revenue || 1;
+  const maxServiceRevenue = serviceRanking[0]?.revenue || 1;
+
+  // avg ads ratio
+  const avgAdsRatio = useMemo(() => {
+    const valid = filteredData.filter(r => r.ads_ratio > 0);
+    if (!valid.length) return 0;
+    return valid.reduce((s, r) => s + r.ads_ratio, 0) / valid.length * 100;
+  }, [filteredData]);
+
   // --- RENDER LOADER ---
   if (isLoading) {
     return (
@@ -619,9 +646,9 @@ export default function App() {
       <div className="login-screen-container">
         <div className="login-box">
           <div className="login-header">
-            <div className="logo-badge large-badge">DOHYUN</div>
+            <div className="login-logo-icon">DH</div>
             <h1 className="login-title">DOHYUN GROUP</h1>
-            <p className="login-subtitle">Hệ thống phân tích tự động dữ liệu Marketing & Doanh số</p>
+            <p className="login-subtitle">Hệ thống phân tích dữ liệu Marketing & Doanh số nội bộ</p>
           </div>
 
           <div className="login-card-body">
@@ -639,7 +666,7 @@ export default function App() {
             )}
 
             {accessToken && userEmail && (
-              <div className="alert alert-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '12px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '10px', borderRadius: '6px' }}>
+              <div className="alert alert-info">
                 <span style={{ opacity: 0.8 }}>Gmail đang kết nối:</span>
                 <strong>{userEmail}</strong>
               </div>
@@ -648,58 +675,41 @@ export default function App() {
             <div className="alert alert-warning" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
                 <AlertCircle size={16} />
-                <span>Báo cáo Google Sheet bảo mật (Locked)</span>
+                <span>Báo cáo bảo mật nội bộ</span>
               </div>
-              <p style={{ fontSize: '11px', marginTop: '6px', opacity: 0.8, lineHeight: 1.4 }}>
-                Sếp và nhân viên cần **Đăng nhập bằng tài khoản Google (Gmail)** đã được phân quyền xem trên tệp Google Sheet để xem báo cáo này.
+              <p style={{ fontSize: '12px', marginTop: '6px', opacity: 0.85, lineHeight: 1.5 }}>
+                Chỉ những tài khoản Gmail đã được phân quyền mới xem được báo cáo này.
               </p>
             </div>
 
             {isClientIdPlaceholder ? (
               <div className="config-warning-box">
                 <div className="warning-header">
-                  <AlertCircle size={18} className="text-amber" />
+                  <AlertCircle size={18} />
                   <h3>Chưa cấu hình Google Client ID</h3>
                 </div>
                 <p className="warning-desc">
-                  Vui lòng thêm mã <code>VITE_GOOGLE_CLIENT_ID</code> vào Settings Secrets trên GitHub để kích hoạt đăng nhập Google.
+                  Vui lòng thêm mã <code>VITE_GOOGLE_CLIENT_ID</code> vào Settings Secrets trên GitHub.
                 </p>
               </div>
             ) : null}
 
             <div className="login-actions">
-              <button 
-                type="button" 
-                className="btn btn-primary btn-login" 
-                onClick={handleLogin}
-                disabled={isClientIdPlaceholder}
-              >
+              <button type="button" className="btn btn-primary btn-login" onClick={handleLogin} disabled={isClientIdPlaceholder}>
                 <Lock size={16} /> Đăng Nhập Với Google
               </button>
-              
               {accessToken && (
-                <button 
-                  type="button" 
-                  className="btn btn-secondary btn-logout-switch" 
-                  onClick={handleLogout}
-                  style={{ width: '100%', marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                >
-                  <LogOut size={16} /> Đăng Xuất / Đổi Tài Khoản Gmail
+                <button type="button" className="btn btn-secondary btn-logout-switch" onClick={handleLogout}>
+                  <LogOut size={16} /> Đăng Xuất / Đổi Tài Khoản
                 </button>
               )}
-              
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-demo" 
-                onClick={handleEnterDemo}
-                style={{ marginTop: accessToken ? '8px' : '0px' }}
-              >
-                <Play size={16} /> Xem Dữ Liệu Mẫu (Offline Demo)
+              <button type="button" className="btn btn-secondary btn-demo" onClick={handleEnterDemo}>
+                <Play size={16} /> Xem Dữ Liệu Mẫu (Demo)
               </button>
             </div>
           </div>
           <div className="login-footer">
-            <p>© 2026 Dohyun Group. Bảo mật nội bộ.</p>
+            <p>© 2026 Dohyun Group · Hệ thống nội bộ bảo mật</p>
           </div>
         </div>
       </div>
@@ -708,385 +718,374 @@ export default function App() {
 
   return (
     <div className="dashboard-container">
-      {/* HEADER */}
+
+      {/* ── HEADER ────────────────────────────────────────── */}
       <header className="dashboard-header">
         <div className="header-title-container">
           <div className="logo-badge">DOHYUN</div>
           <div>
             <h1 className="header-title">DOHYUN GROUP</h1>
             <p className="header-subtitle">
-              {isDemoMode 
-                ? 'Chế độ: Dữ liệu mẫu (Offline Demo)' 
-                : `Đồng bộ Google Sheet Live Sync (Gmail truy cập: OK) 🟢`}
+              {isDemoMode ? '⚠️ Chế độ dữ liệu mẫu (Demo)' : '🟢 Live — Đồng bộ Google Sheets'}
+              {!isDemoMode && userEmail && <span style={{ marginLeft: 8, opacity: 0.6 }}>· {userEmail}</span>}
             </p>
           </div>
         </div>
-        
         <div className="header-meta">
           {records.length > 0 && (
-            <span className="meta-badge">
-              <Calendar size={14} />
-              Dữ liệu: {minDate} đến {maxDate}
-            </span>
+            <span className="meta-badge"><Calendar size={13} />{minDate} → {maxDate}</span>
           )}
-          
-          {!isDemoMode && (
-            <span className="meta-badge pulse-badge">
-              Live Secured
-            </span>
-          )}
-
+          {!isDemoMode && <span className="meta-badge pulse-badge">Live Secured</span>}
           {(accessToken || isDemoMode) && (
-            <button 
-              type="button" 
-              className="btn btn-secondary btn-logout" 
-              onClick={handleLogout}
-              title="Đăng xuất"
-              aria-label="Đăng xuất"
-            >
-              <LogOut size={14} /> {isDemoMode ? 'Đăng nhập lại' : 'Đăng xuất'}
+            <button type="button" className="btn btn-secondary btn-logout" onClick={handleLogout}>
+              <LogOut size={13} /> {isDemoMode ? 'Đăng nhập' : 'Đăng xuất'}
             </button>
           )}
         </div>
       </header>
 
-      {/* FILTER PANEL */}
+      {/* ── TAB SWITCHER ──────────────────────────────────── */}
+      <div className="tab-switcher">
+        <button
+          type="button"
+          className={`tab-btn ${activeView === 'ceo' ? 'tab-active' : ''}`}
+          onClick={() => setActiveView('ceo')}
+          id="tab-ceo"
+        >
+          <TrendingUp size={15} /> CEO Overview
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeView === 'team' ? 'tab-active' : ''}`}
+          onClick={() => setActiveView('team')}
+          id="tab-team"
+        >
+          <Users size={15} /> Team Ads
+        </button>
+      </div>
+
       <section className="filter-panel" id="filters">
         <div className="filter-grid">
-          {/* Branch Select */}
           <div className="filter-group">
             <label htmlFor="branch-select">Chi Nhánh</label>
             <div className="select-wrapper">
-              <Building2 size={16} className="select-icon" />
-              <select 
-                id="branch-select" 
-                value={selectedBranch} 
-                onChange={(e) => { setSelectedBranch(e.target.value); setCurrentPage(1); }}
-              >
+              <Building2 size={15} className="select-icon" />
+              <select id="branch-select" value={selectedBranch} onChange={e => { setSelectedBranch(e.target.value); setCurrentPage(1); }}>
                 {uniqueBranches.map(b => <option key={b} value={b}>{b === 'All' ? 'Tất cả Chi Nhánh' : b}</option>)}
               </select>
             </div>
           </div>
-
-          {/* Team Select */}
           <div className="filter-group">
-            <label htmlFor="team-select">Đội Ngũ (Team)</label>
+            <label htmlFor="team-select">Team</label>
             <div className="select-wrapper">
-              <User size={16} className="select-icon" />
-              <select 
-                id="team-select" 
-                value={selectedTeam} 
-                onChange={(e) => { setSelectedTeam(e.target.value); setCurrentPage(1); }}
-              >
+              <User size={15} className="select-icon" />
+              <select id="team-select" value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setCurrentPage(1); }}>
                 {uniqueTeams.map(t => <option key={t} value={t}>{t === 'All' ? 'Tất cả Team' : t}</option>)}
               </select>
             </div>
           </div>
-
-          {/* Service Select */}
           <div className="filter-group">
             <label htmlFor="service-select">Dịch Vụ</label>
             <div className="select-wrapper">
-              <Scissors size={16} className="select-icon" />
-              <select 
-                id="service-select" 
-                value={selectedService} 
-                onChange={(e) => { setSelectedService(e.target.value); setCurrentPage(1); }}
-              >
+              <Scissors size={15} className="select-icon" />
+              <select id="service-select" value={selectedService} onChange={e => { setSelectedService(e.target.value); setCurrentPage(1); }}>
                 {uniqueServices.map(s => <option key={s} value={s}>{s === 'All' ? 'Tất cả Dịch Vụ' : s}</option>)}
               </select>
             </div>
           </div>
-
-          {/* Date Picker Start */}
           <div className="filter-group">
             <label htmlFor="start-date-picker">Từ ngày</label>
-            <input 
-              type="date" 
-              id="start-date-picker" 
-              value={startDate} 
-              min={minDate}
-              max={maxDate}
-              onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
-            />
+            <input type="date" id="start-date-picker" value={startDate} min={minDate} max={maxDate} onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }} />
           </div>
-
-          {/* Date Picker End */}
           <div className="filter-group">
             <label htmlFor="end-date-picker">Đến ngày</label>
-            <input 
-              type="date" 
-              id="end-date-picker" 
-              value={endDate} 
-              min={minDate}
-              max={maxDate}
-              onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
-            />
+            <input type="date" id="end-date-picker" value={endDate} min={minDate} max={maxDate} onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }} />
           </div>
-
-          {/* Search bar */}
-          <div className="filter-group search-group">
-            <label htmlFor="search-input">Tìm kiếm nhanh</label>
+          <div className="filter-group">
+            <label htmlFor="search-input">Tìm kiếm</label>
             <div className="search-wrapper">
-              <Search size={16} className="search-icon" />
-              <input 
-                type="text" 
-                id="search-input" 
-                placeholder="Tìm operator, BM, dịch vụ..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              />
+              <Search size={15} className="search-icon" />
+              <input type="text" id="search-input" placeholder="Operator, BM, dịch vụ..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} />
             </div>
           </div>
         </div>
-
-        {/* Reset button */}
         <div className="filter-actions">
-          <span className="results-count">Tìm thấy <strong>{filteredData.length}</strong> chiến dịch ngày</span>
-          
+          <span className="results-count">Hiển thị <strong>{filteredData.length}</strong> bản ghi</span>
           <div className="action-buttons-group">
-            <a 
-              href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}`}
-              target="_blank" 
-              rel="noreferrer"
-              className="btn btn-secondary"
-              style={{ marginRight: '8px' }}
-            >
-              <FileSpreadsheet size={14} /> Mở Google Sheet
+            <a href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}`} target="_blank" rel="noreferrer" className="btn btn-secondary">
+              <FileSpreadsheet size={14} /> Mở Sheet
             </a>
-            
-            <button 
-              type="button" 
-              id="clear-filters-btn" 
-              className="btn btn-secondary" 
-              onClick={handleResetFilters}
-              aria-label="Xóa tất cả bộ lọc"
-            >
-              <RefreshCw size={14} /> Xóa Bộ Lọc
+            <button type="button" id="clear-filters-btn" className="btn btn-secondary" onClick={handleResetFilters}>
+              <RefreshCw size={14} /> Xóa Lọc
             </button>
           </div>
         </div>
       </section>
 
-      {/* KPI METRICS BLOCK */}
-      <section className="kpi-grid">
-        {/* Card 1: Revenue */}
-        <div className="kpi-card premium-card">
-          <div className="kpi-icon-container bg-emerald">
-            <TrendingUp size={20} />
-          </div>
-          <div className="kpi-details">
-            <span className="kpi-label">Tổng Doanh Số</span>
-            <span className="kpi-value text-emerald">{formatCurrency(metrics.revenue)}</span>
-            <div className="kpi-subtext">Từ chiến dịch quảng cáo mới</div>
-          </div>
-        </div>
+      {/* ══════════════════════════════════════════
+           CEO VIEW
+      ══════════════════════════════════════════ */}
+      {activeView === 'ceo' && (<>
+      <p className="section-title">Tổng Quan Tài Chính</p>
+      <section className="kpi-grid-top">
 
-        {/* Card 2: Ads Spend */}
-        <div className="kpi-card">
-          <div className="kpi-icon-container bg-blue">
-            <DollarSign size={20} />
+        {/* 1. Doanh số */}
+        <div className="kpi-hero kpi-hero-revenue">
+          <div className="kpi-hero-top">
+            <span className="kpi-hero-label">Tổng Doanh Số</span>
+            <div className="kpi-hero-icon icon-emerald"><TrendingUp size={18} /></div>
           </div>
-          <div className="kpi-details">
-            <span className="kpi-label">Chi Tiêu Ads</span>
-            <span className="kpi-value text-blue">{formatCurrency(metrics.adsSpend)}</span>
-            <div className="kpi-subtext">Ngân sách chạy quảng cáo</div>
-          </div>
-        </div>
-
-        {/* Card 3: ROAS */}
-        <div className="kpi-card">
-          <div className="kpi-icon-container bg-purple">
-            <Percent size={20} />
-          </div>
-          <div className="kpi-details">
-            <span className="kpi-label">ROAS (Doanh số / Ads)</span>
-            <span className={`kpi-value ${metrics.roas >= 1.5 ? 'text-emerald' : metrics.roas >= 1.0 ? 'text-amber' : 'text-rose'}`}>
-              {metrics.roas.toFixed(2)}x
+          <div className="kpi-hero-value c-emerald">{formatCurrency(metrics.revenue)}</div>
+          <div className="kpi-hero-sub">
+            Lợi nhuận từ Ads
+            <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : metrics.roas >= 1 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
+              ROAS {metrics.roas.toFixed(1)}x
             </span>
-            <div className="kpi-subtext">Hiệu suất chi tiêu ads</div>
           </div>
         </div>
 
-        {/* Card 4: Leads (SĐT) */}
-        <div className="kpi-card">
-          <div className="kpi-icon-container bg-amber">
-            <Users size={20} />
+        {/* 2. Chi tiêu Ads */}
+        <div className="kpi-hero kpi-hero-ads">
+          <div className="kpi-hero-top">
+            <span className="kpi-hero-label">Chi Tiêu Ads</span>
+            <div className="kpi-hero-icon icon-blue"><DollarSign size={18} /></div>
           </div>
-          <div className="kpi-details">
-            <span className="kpi-label">Tổng Số Điện Thoại (Leads)</span>
-            <span className="kpi-value text-amber">{formatNumber(metrics.leads)}</span>
-            <div className="kpi-subtext">Chi phí / Lead: {formatCurrency(metrics.costPerLead)}</div>
+          <div className="kpi-hero-value c-blue">{formatCurrency(metrics.adsSpend)}</div>
+          <div className="kpi-hero-sub">
+            Ngân sách quảng cáo
+            <span className={`sub-tag ${avgAdsRatio <= 15 ? 'sub-tag-good' : avgAdsRatio <= 25 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
+              {avgAdsRatio.toFixed(1)}% DS
+            </span>
           </div>
         </div>
 
-        {/* Card 5: Show-ups (Khách đến) */}
-        <div className="kpi-card">
-          <div className="kpi-icon-container bg-violet">
-            <MousePointerClick size={20} />
+        {/* 3. ROAS */}
+        <div className="kpi-hero kpi-hero-roas">
+          <div className="kpi-hero-top">
+            <span className="kpi-hero-label">ROAS</span>
+            <div className="kpi-hero-icon icon-violet"><Zap size={18} /></div>
           </div>
-          <div className="kpi-details">
-            <span className="kpi-label">Khách Đến Chi Nhánh</span>
-            <span className="kpi-value text-violet">{formatNumber(metrics.showups)}</span>
-            <div className="kpi-subtext">Tỷ lệ đến: {metrics.leadToShowupRate.toFixed(1)}%</div>
+          <div className={`kpi-hero-value ${metrics.roas >= 2 ? 'c-good' : metrics.roas >= 1 ? 'c-warn' : 'c-bad'}`}>
+            {metrics.roas.toFixed(2)}x
+          </div>
+          <div className="kpi-hero-sub">
+            Doanh số / Chi phí Ads
+            <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : metrics.roas >= 1 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
+              {metrics.roas >= 2 ? 'Tốt' : metrics.roas >= 1 ? 'Trung bình' : 'Cần cải thiện'}
+            </span>
+          </div>
+        </div>
+
+        {/* 4. %Ads/Doanh số */}
+        <div className="kpi-hero kpi-hero-ads-pct">
+          <div className="kpi-hero-top">
+            <span className="kpi-hero-label">%Ads / Doanh Số</span>
+            <div className="kpi-hero-icon icon-amber"><Percent size={18} /></div>
+          </div>
+          <div className={`kpi-hero-value ${avgAdsRatio <= 15 ? 'c-good' : avgAdsRatio <= 25 ? 'c-warn' : 'c-bad'}`}>
+            {avgAdsRatio.toFixed(1)}%
+          </div>
+          <div className="kpi-hero-sub">
+            Benchmark ngành &lt;15%
+            <span className={`sub-tag ${avgAdsRatio <= 15 ? 'sub-tag-good' : avgAdsRatio <= 25 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
+              {avgAdsRatio <= 15 ? 'Hiệu quả' : avgAdsRatio <= 25 ? 'Cần tối ưu' : 'Cao'}
+            </span>
           </div>
         </div>
       </section>
 
-      {/* CHARTS CONTAINER */}
+      {/* ══════════════════════════════════════════
+           CEO VIEW — ROW 2: Marketing Funnel KPIs
+      ══════════════════════════════════════════ */}
+      <p className="section-title">Phễu Marketing</p>
+      <section className="kpi-grid-funnel">
+        <div className="kpi-funnel">
+          <div className="kpi-funnel-icon icon-blue"><Users size={20} /></div>
+          <div className="kpi-funnel-body">
+            <span className="kpi-funnel-label">Tổng Leads (SĐT)</span>
+            <span className="kpi-funnel-value c-blue">{formatNumber(metrics.leads)}</span>
+            <span className="kpi-funnel-sub">Chi phí/Lead: {formatCurrency(metrics.costPerLead)}</span>
+          </div>
+        </div>
+        <div className="kpi-funnel">
+          <div className="kpi-funnel-icon icon-violet"><MousePointerClick size={20} /></div>
+          <div className="kpi-funnel-body">
+            <span className="kpi-funnel-label">Khách Đến (Show-up)</span>
+            <span className="kpi-funnel-value c-violet">{formatNumber(metrics.showups)}</span>
+            <span className="kpi-funnel-sub">Tỷ lệ: {metrics.leadToShowupRate.toFixed(1)}% · Cost: {formatCurrency(metrics.costPerShowup)}</span>
+          </div>
+        </div>
+        <div className="kpi-funnel">
+          <div className="kpi-funnel-icon icon-emerald"><Target size={20} /></div>
+          <div className="kpi-funnel-body">
+            <span className="kpi-funnel-label">Doanh Số / Khách Đến</span>
+            <span className="kpi-funnel-value c-emerald">
+              {metrics.showups > 0 ? formatCurrency(metrics.revenue / metrics.showups) : '—'}
+            </span>
+            <span className="kpi-funnel-sub">Revenue per show-up</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════
+           CEO VIEW — ROW 3: Trend + Branch Ranking
+      ══════════════════════════════════════════ */}
       {records.length > 0 && (
-        <section className="charts-grid">
-          {/* Chart 1: Trend Area Chart */}
-          <div className="chart-card large-chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">Xu Hướng Chi Tiêu Ads vs Doanh Số</h2>
-              <span className="chart-tag">Theo ngày</span>
-            </div>
-            <div className="chart-body">
-              <ResponsiveContainer width="100%" height={320}>
-                <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0}/>
-                    </linearGradient>
-                    <linearGradient id="colorAds" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" vertical={false} />
-                  <XAxis dataKey="date" stroke="#a0aec0" fontSize={12} tickLine={false} />
-                  <YAxis 
-                    stroke="#a0aec0" 
-                    fontSize={12} 
-                    tickLine={false} 
-                    tickFormatter={(val) => `${(val / 1000000).toFixed(0)}M`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1a202c', borderColor: '#2d3748', borderRadius: '8px' }}
-                    labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                    formatter={(val: number) => [formatCurrency(val), '']}
-                  />
-                  <Legend verticalAlign="top" height={36} />
-                  <Area name="Doanh Số" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
-                  <Area name="Chi Tiêu Ads" type="monotone" dataKey="adsSpend" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorAds)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Chart 2: Service Breakdown */}
-          <div className="chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">Top 10 Dịch Vụ Theo Doanh Số</h2>
-              <span className="chart-tag">Doanh số & Ads</span>
-            </div>
-            <div className="chart-body">
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={serviceChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" vertical={false} />
-                  <XAxis dataKey="name" stroke="#a0aec0" fontSize={11} tickLine={false} />
-                  <YAxis 
-                    stroke="#a0aec0" 
-                    fontSize={11} 
-                    tickLine={false} 
-                    tickFormatter={(val) => `${(val / 1000000).toFixed(0)}M`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1a202c', borderColor: '#2d3748', borderRadius: '8px' }}
-                    formatter={(val: number) => [formatCurrency(val), '']}
-                  />
-                  <Legend verticalAlign="top" height={36} />
-                  <Bar name="Doanh Số" dataKey="revenue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  <Bar name="Chi Tiêu Ads" dataKey="adsSpend" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Chart 3: Branch breakdown pie */}
-          <div className="chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">Tỷ Lệ Doanh Số Theo Chi Nhánh</h2>
-              <span className="chart-tag">Cơ cấu %</span>
-            </div>
-            <div className="chart-body flex-center">
-              {branchChartData.length > 0 ? (
+        <>
+          <p className="section-title">Xu Hướng & Hiệu Suất Chi Nhánh</p>
+          <div className="charts-row">
+            {/* Trend Chart */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">Doanh Số & Chi Phí Ads Theo Ngày</h2>
+                <span className="chart-tag">Trend</span>
+              </div>
+              <div className="chart-body">
                 <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={branchChartData}
-                      cx="50%"
-                      cy="45%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      {branchChartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#1a202c', borderColor: '#2d3748', borderRadius: '8px' }}
-                      formatter={(val: number) => [formatCurrency(val), 'Doanh Số']}
-                    />
-                    <Legend verticalAlign="bottom" height={36} layout="horizontal" />
-                  </PieChart>
+                  <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#34d399" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#34d399" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="gAds" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f9cf9" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#4f9cf9" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="date" stroke="#4a5568" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#4a5568" fontSize={11} tickLine={false} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0d1428', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }} labelStyle={{ color: '#f0f4ff', fontWeight: '700' }} formatter={(v: number) => [formatCurrency(v), '']} />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
+                    <Area name="Doanh Số" type="monotone" dataKey="revenue" stroke="#34d399" strokeWidth={2} fill="url(#gRevenue)" />
+                    <Area name="Chi Tiêu Ads" type="monotone" dataKey="adsSpend" stroke="#4f9cf9" strokeWidth={2} fill="url(#gAds)" />
+                  </AreaChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="no-data">Không có dữ liệu doanh số</div>
-              )}
+              </div>
+            </div>
+
+            {/* Branch Ranking */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">Ranking Chi Nhánh</h2>
+                <span className="chart-tag">Doanh số</span>
+              </div>
+              <div className="chart-body" style={{ minHeight: 'auto', overflowY: 'auto' }}>
+                <div className="ranking-list">
+                  {branchRanking.map((item, i) => (
+                    <div key={item.name} className="ranking-item">
+                      <div className={`rank-num ${i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other'}`}>
+                        {i + 1}
+                      </div>
+                      <div className="rank-bar-wrap">
+                        <div className="rank-label">
+                          <span className="rank-name">{item.name}</span>
+                          <span className="rank-value" style={{ color: '#34d399' }}>{formatCurrency(item.revenue)}</span>
+                        </div>
+                        <div className="rank-bar-bg">
+                          <div className="rank-bar-fill" style={{ width: `${(item.revenue / maxBranchRevenue) * 100}%`, background: i === 0 ? 'var(--amber)' : i === 1 ? 'var(--blue)' : 'var(--violet)' }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3 }}>
+                          Ads: {formatCurrency(item.adsSpend)} · {item.leads} leads
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Chart 4: Funnel / Conversion Bar */}
-          <div className="chart-card large-chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">So Sánh Doanh Số vs Chi Tiêu Ads Theo Team</h2>
-              <span className="chart-tag">Hiệu suất team</span>
+          {/* ══════════════════════════════════════════
+               CEO VIEW — ROW 4: Service + Team + Pie
+          ══════════════════════════════════════════ */}
+          <p className="section-title">Phân Tích Dịch Vụ & Team</p>
+          <div className="charts-row-3">
+            {/* Service Ranking */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">Top Dịch Vụ</h2>
+                <span className="chart-tag">Doanh số</span>
+              </div>
+              <div className="chart-body" style={{ minHeight: 'auto' }}>
+                <div className="ranking-list">
+                  {serviceRanking.map((item, i) => (
+                    <div key={item.name} className="ranking-item">
+                      <div className={`rank-num ${i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other'}`}>{i + 1}</div>
+                      <div className="rank-bar-wrap">
+                        <div className="rank-label">
+                          <span className="rank-name">{item.name || 'Khác'}</span>
+                          <span className="rank-value" style={{ color: 'var(--violet)' }}>{formatCurrency(item.revenue)}</span>
+                        </div>
+                        <div className="rank-bar-bg">
+                          <div className="rank-bar-fill" style={{ width: `${(item.revenue / maxServiceRevenue) * 100}%`, background: 'var(--violet)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="chart-body">
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" vertical={false} />
-                  <XAxis dataKey="name" stroke="#a0aec0" fontSize={12} tickLine={false} />
-                  <YAxis 
-                    stroke="#a0aec0" 
-                    fontSize={12} 
-                    tickLine={false} 
-                    tickFormatter={(val) => `${(val / 1000000).toFixed(0)}M`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1a202c', borderColor: '#2d3748', borderRadius: '8px' }}
-                    formatter={(val: number) => [formatCurrency(val), '']}
-                  />
-                  <Legend verticalAlign="top" height={36} />
-                  <Bar name="Doanh Số" dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar name="Chi Tiêu Ads" dataKey="adsSpend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+
+            {/* Team Chart */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">Hiệu Suất Team</h2>
+                <span className="chart-tag">Doanh số vs Ads</span>
+              </div>
+              <div className="chart-body">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#4a5568" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#4a5568" fontSize={11} tickLine={false} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0d1428', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }} formatter={(v: number) => [formatCurrency(v), '']} />
+                    <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12 }} />
+                    <Bar name="Doanh Số" dataKey="revenue" fill="#34d399" radius={[4,4,0,0]} />
+                    <Bar name="Chi Tiêu Ads" dataKey="adsSpend" fill="#fbbf24" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Branch Pie */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h2 className="chart-title">Cơ Cấu Doanh Số</h2>
+                <span className="chart-tag">Chi nhánh %</span>
+              </div>
+              <div className="chart-body flex-center">
+                {branchChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={branchChartData} cx="50%" cy="44%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
+                        {branchChartData.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#0d1428', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }} formatter={(v: number) => [formatCurrency(v), 'Doanh Số']} />
+                      <Legend verticalAlign="bottom" height={36} layout="horizontal" wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : <div className="no-data">Không có dữ liệu</div>}
+              </div>
             </div>
           </div>
-        </section>
+        </>
       )}
 
-      {/* DATA TABLE CONTAINER */}
+      {/* ══════════════════════════════════════════
+           CEO VIEW — DATA TABLE (Detail Log)
+      ══════════════════════════════════════════ */}
+      <p className="section-title">Nhật Ký Chi Tiết</p>
       <section className="table-card">
         <div className="table-header">
           <div>
-            <h2 className="table-title">Chi Tiết Nhật Ký Quảng Cáo</h2>
-            <p className="table-subtitle">Hiển thị {sortedData.length} dòng dữ liệu</p>
+            <h2 className="table-title">Chi Tiết Chiến Dịch Quảng Cáo</h2>
+            <p className="table-subtitle">{sortedData.length} bản ghi · Nhấn tiêu đề cột để sắp xếp</p>
           </div>
-          
           <div className="page-size-selector">
-            <label htmlFor="page-size-select">Dòng trên trang:</label>
-            <select 
-              id="page-size-select" 
-              value={pageSize} 
-              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-            >
+            <label htmlFor="page-size-select">Dòng/trang:</label>
+            <select id="page-size-select" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -1099,47 +1098,26 @@ export default function App() {
           <table className="custom-table" id="data-log-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort('date')} className="sortable">
-                  Ngày <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('branch')} className="sortable">
-                  Chi Nhánh <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('team')} className="sortable">
-                  Team <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('operator')} className="sortable">
-                  Người Làm <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('service')} className="sortable">
-                  Dịch Vụ <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('ads_spend')} className="sortable text-right">
-                  Chi Tiêu Ads <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('leads')} className="sortable text-right">
-                  SĐT (Lead) <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('cost_per_lead')} className="sortable text-right">
-                  Cost/SĐT <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('showups')} className="sortable text-right">
-                  Khách Đến <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('revenue')} className="sortable text-right">
-                  Doanh Số <ArrowUpDown size={12} />
-                </th>
-                <th onClick={() => handleSort('ads_ratio')} className="sortable text-right">
-                  %Ads/DT <ArrowUpDown size={12} />
-                </th>
+                <th onClick={() => handleSort('date')} className="sortable">Ngày <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('branch')} className="sortable">Chi Nhánh <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('team')} className="sortable">Team <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('operator')} className="sortable">Operator <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('service')} className="sortable">Dịch Vụ <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('ads_spend')} className="sortable text-right">Chi Ads <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('leads')} className="sortable text-right">Leads <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('cost_per_lead')} className="sortable text-right">Cost/Lead <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('showups')} className="sortable text-right">Showup <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('revenue')} className="sortable text-right">Doanh Số <ArrowUpDown size={11} /></th>
+                <th onClick={() => handleSort('ads_ratio')} className="sortable text-right">%Ads <ArrowUpDown size={11} /></th>
               </tr>
             </thead>
             <tbody>
-              {paginatedData.length > 0 ? (
-                paginatedData.map((row, idx) => (
+              {paginatedData.length > 0 ? paginatedData.map((row, idx) => {
+                const rowRoas = row.ads_spend > 0 ? row.revenue / row.ads_spend : 0;
+                return (
                   <tr key={idx}>
                     <td><span className="date-badge">{row.date}</span></td>
-                    <td>{row.branch}</td>
+                    <td><span className="branch-badge">{row.branch}</span></td>
                     <td>{row.team}</td>
                     <td><span className="operator-badge">{row.operator}</span></td>
                     <td><span className="service-badge">{row.service}</span></td>
@@ -1147,77 +1125,255 @@ export default function App() {
                     <td className="text-right font-semibold">{row.leads}</td>
                     <td className="text-right font-mono">{formatCurrency(row.cost_per_lead)}</td>
                     <td className="text-right">{row.showups}</td>
-                    <td className="text-right font-mono text-emerald font-semibold">{formatCurrency(row.revenue)}</td>
-                    <td className="text-right font-mono">{(row.ads_ratio * 100).toFixed(1)}%</td>
+                    <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(row.revenue)}</td>
+                    <td className={`text-right font-semibold ${rowRoas >= 2 ? 'roas-good' : rowRoas >= 1 ? 'roas-warn' : 'roas-bad'}`}>
+                      {(row.ads_ratio * 100).toFixed(1)}%
+                    </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={11} className="table-empty">
-                    Không tìm thấy bản ghi nào khớp bộ lọc.
-                  </td>
-                </tr>
+                );
+              }) : (
+                <tr><td colSpan={11} className="table-empty">Không tìm thấy bản ghi nào.</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
-        {/* PAGINATION */}
         <div className="table-pagination">
           <div className="pagination-info">
-            Trang <strong>{currentPage}</strong> trên <strong>{totalPages}</strong> (Hiển thị {Math.min(sortedData.length, (currentPage - 1) * pageSize + 1)} - {Math.min(sortedData.length, currentPage * pageSize)} trên {sortedData.length} dòng)
+            Trang <strong>{currentPage}</strong>/{totalPages} &nbsp;·&nbsp;
+            {Math.min(sortedData.length, (currentPage-1)*pageSize+1)}–{Math.min(sortedData.length, currentPage*pageSize)} / {sortedData.length} dòng
           </div>
           <div className="pagination-controls">
-            <button 
-              type="button" 
-              className="btn btn-icon" 
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              aria-label="Trang trước"
-            >
-              <ChevronLeft size={16} />
+            <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage===1} aria-label="Trang trước">
+              <ChevronLeft size={15} />
             </button>
             <span className="pagination-pages">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum = i + 1;
+                let p = i + 1;
                 if (currentPage > 3 && totalPages > 5) {
-                  pageNum = currentPage - 3 + i;
-                  if (pageNum + (4 - i) > totalPages) {
-                    pageNum = totalPages - 4 + i;
-                  }
+                  p = currentPage - 3 + i;
+                  if (p + (4-i) > totalPages) p = totalPages - 4 + i;
                 }
-                return (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    className={`page-num-btn ${currentPage === pageNum ? 'active' : ''}`}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </button>
-                );
+                return <button key={p} type="button" className={`page-num-btn ${currentPage===p?'active':''}`} onClick={() => setCurrentPage(p)}>{p}</button>;
               })}
             </span>
-            <button 
-              type="button" 
-              className="btn btn-icon" 
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              aria-label="Trang sau"
-            >
-              <ChevronRight size={16} />
+            <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage===totalPages} aria-label="Trang sau">
+              <ChevronRight size={15} />
             </button>
           </div>
         </div>
       </section>
+      </>)}
 
-      {/* FOOTER */}
+      {/* ══════════════════════════════════════════
+           TEAM ADS VIEW
+      ══════════════════════════════════════════ */}
+      {activeView === 'team' && (<>
+
+        <p className="section-title">Chỉ Số Vận Hành</p>
+        <section className="kpi-grid-top">
+          <div className="kpi-hero kpi-hero-ads">
+            <div className="kpi-hero-top">
+              <span className="kpi-hero-label">Tổng Leads (SĐT)</span>
+              <div className="kpi-hero-icon icon-blue"><Users size={18} /></div>
+            </div>
+            <div className="kpi-hero-value c-blue">{formatNumber(metrics.leads)}</div>
+            <div className="kpi-hero-sub">Chi phí trung bình / lead
+              <span className="sub-tag sub-tag-warn">{formatCurrency(metrics.costPerLead)}</span>
+            </div>
+          </div>
+
+          <div className="kpi-hero kpi-hero-roas">
+            <div className="kpi-hero-top">
+              <span className="kpi-hero-label">Khách Đến (Show-up)</span>
+              <div className="kpi-hero-icon icon-violet"><MousePointerClick size={18} /></div>
+            </div>
+            <div className="kpi-hero-value c-violet">{formatNumber(metrics.showups)}</div>
+            <div className="kpi-hero-sub">Tỷ lệ Lead → Show-up
+              <span className={`sub-tag ${metrics.leadToShowupRate >= 30 ? 'sub-tag-good' : metrics.leadToShowupRate >= 15 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
+                {metrics.leadToShowupRate.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="kpi-hero kpi-hero-revenue">
+            <div className="kpi-hero-top">
+              <span className="kpi-hero-label">Chi Tiêu Ads</span>
+              <div className="kpi-hero-icon icon-emerald"><DollarSign size={18} /></div>
+            </div>
+            <div className="kpi-hero-value c-emerald">{formatCurrency(metrics.adsSpend)}</div>
+            <div className="kpi-hero-sub">Ngân sách đã dùng
+              <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : 'sub-tag-warn'}`}>ROAS {metrics.roas.toFixed(1)}x</span>
+            </div>
+          </div>
+
+          <div className="kpi-hero kpi-hero-ads-pct">
+            <div className="kpi-hero-top">
+              <span className="kpi-hero-label">Cost / Show-up</span>
+              <div className="kpi-hero-icon icon-amber"><Target size={18} /></div>
+            </div>
+            <div className="kpi-hero-value c-amber">{formatCurrency(metrics.costPerShowup)}</div>
+            <div className="kpi-hero-sub">Chi phí để 1 khách đến cơ sở
+              <span className="sub-tag sub-tag-warn">/ showup</span>
+            </div>
+          </div>
+        </section>
+
+        <p className="section-title">Xu Hướng Leads & Chi Phí</p>
+        <div className="charts-row">
+          <div className="chart-card">
+            <div className="chart-header">
+              <h2 className="chart-title">Leads & Chi Tiêu Ads Theo Ngày</h2>
+              <span className="chart-tag">Team view</span>
+            </div>
+            <div className="chart-body">
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gLeads" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f9cf9" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#4f9cf9" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="gAds2" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="date" stroke="#4a5568" fontSize={11} tickLine={false} />
+                  <YAxis yAxisId="left" stroke="#4a5568" fontSize={11} tickLine={false} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#4a5568" fontSize={11} tickLine={false} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0d1428', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }} labelStyle={{ color: '#f0f4ff', fontWeight: '700' }} formatter={(v: number, name: string) => name === 'Leads' ? [v, name] : [formatCurrency(v), name]} />
+                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
+                  <Area yAxisId="left" name="Leads" type="monotone" dataKey="leads" stroke="#4f9cf9" strokeWidth={2} fill="url(#gLeads)" />
+                  <Area yAxisId="right" name="Chi Tiêu Ads" type="monotone" dataKey="adsSpend" stroke="#fbbf24" strokeWidth={2} fill="url(#gAds2)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <h2 className="chart-title">Ranking Operator</h2>
+              <span className="chart-tag">Leads & Ads</span>
+            </div>
+            <div className="chart-body" style={{ minHeight: 'auto', overflowY: 'auto' }}>
+              <div className="ranking-list">
+                {((): Array<{name:string;leads:number;adsSpend:number;revenue:number}> => {
+                  const g: {[k:string]:{name:string;leads:number;adsSpend:number;revenue:number}} = {};
+                  filteredData.forEach(r => {
+                    const k = r.operator || 'Không rõ';
+                    if (!g[k]) g[k] = {name:k,leads:0,adsSpend:0,revenue:0};
+                    g[k].leads += r.leads; g[k].adsSpend += r.ads_spend; g[k].revenue += r.revenue;
+                  });
+                  return Object.values(g).sort((a,b)=>b.leads-a.leads).slice(0,8);
+                })().map((item,i) => {
+                  const maxL = filteredData.reduce((m,r)=>Math.max(m,r.leads),1);
+                  return (
+                    <div key={item.name} className="ranking-item">
+                      <div className={`rank-num ${i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-other'}`}>{i+1}</div>
+                      <div className="rank-bar-wrap">
+                        <div className="rank-label">
+                          <span className="rank-name">{item.name}</span>
+                          <span className="rank-value" style={{color:'var(--blue)'}}>{item.leads} leads</span>
+                        </div>
+                        <div className="rank-bar-bg">
+                          <div className="rank-bar-fill" style={{width:`${(item.leads/maxL)*100}%`,background:'var(--blue)'}} />
+                        </div>
+                        <div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>
+                          Ads: {formatCurrency(item.adsSpend)} · DS: {formatCurrency(item.revenue)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p className="section-title">Nhật Ký Chi Tiết — Góc Nhìn Team</p>
+        <section className="table-card">
+          <div className="table-header">
+            <div>
+              <h2 className="table-title">Chi Tiết Theo Operator & BM</h2>
+              <p className="table-subtitle">{sortedData.length} bản ghi · Focus: Leads, Cost, Show-up</p>
+            </div>
+            <div className="page-size-selector">
+              <label htmlFor="page-size-select-team">Dòng/trang:</label>
+              <select id="page-size-select-team" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+          <div className="table-responsive">
+            <table className="custom-table" id="team-data-table">
+              <thead>
+                <tr>
+                  <th onClick={() => handleSort('date')} className="sortable">Ngày <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('operator')} className="sortable">Operator <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('branch')} className="sortable">Chi Nhánh <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('bm')} className="sortable">BM Account <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('service')} className="sortable">Dịch Vụ <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('ads_spend')} className="sortable text-right">Chi Ads <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('contacts')} className="sortable text-right">Liên Hệ <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('leads')} className="sortable text-right">Leads <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('cost_per_lead')} className="sortable text-right">Cost/Lead <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('showups')} className="sortable text-right">Show-up <ArrowUpDown size={11}/></th>
+                  <th onClick={() => handleSort('cost_per_showup')} className="sortable text-right">Cost/Show <ArrowUpDown size={11}/></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.length > 0 ? paginatedData.map((row, idx) => {
+                  const cpl = row.cost_per_lead;
+                  return (
+                    <tr key={idx}>
+                      <td><span className="date-badge">{row.date}</span></td>
+                      <td><span className="operator-badge">{row.operator}</span></td>
+                      <td><span className="branch-badge">{row.branch}</span></td>
+                      <td style={{fontSize:12,color:'var(--text-2)'}}>{row.bm || '—'}</td>
+                      <td><span className="service-badge">{row.service}</span></td>
+                      <td className="text-right font-mono">{formatCurrency(row.ads_spend)}</td>
+                      <td className="text-right">{row.contacts}</td>
+                      <td className="text-right font-semibold" style={{color:'var(--blue)'}}>{row.leads}</td>
+                      <td className={`text-right font-mono ${cpl>0&&cpl<100000?'roas-good':cpl<300000?'roas-warn':'roas-bad'}`}>{formatCurrency(cpl)}</td>
+                      <td className="text-right font-semibold" style={{color:'var(--violet)'}}>{row.showups}</td>
+                      <td className="text-right font-mono">{formatCurrency(row.cost_per_showup)}</td>
+                    </tr>
+                  );
+                }) : (
+                  <tr><td colSpan={11} className="table-empty">Không có dữ liệu.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-pagination">
+            <div className="pagination-info">
+              Trang <strong>{currentPage}</strong>/{totalPages} &nbsp;·&nbsp; {Math.min(sortedData.length,(currentPage-1)*pageSize+1)}–{Math.min(sortedData.length,currentPage*pageSize)} / {sortedData.length} dòng
+            </div>
+            <div className="pagination-controls">
+              <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1}><ChevronLeft size={15}/></button>
+              <span className="pagination-pages">
+                {Array.from({length:Math.min(5,totalPages)},(_,i)=>{
+                  let p=i+1;
+                  if(currentPage>3&&totalPages>5){p=currentPage-3+i;if(p+(4-i)>totalPages)p=totalPages-4+i;}
+                  return <button key={p} type="button" className={`page-num-btn ${currentPage===p?'active':''}`} onClick={()=>setCurrentPage(p)}>{p}</button>;
+                })}
+              </span>
+              <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages}><ChevronRight size={15}/></button>
+            </div>
+          </div>
+        </section>
+      </>)}
+
       <footer className="dashboard-footer-bar">
-        <p>© 2026 Dohyun Group. All rights reserved. Built with React & Vite.</p>
+        <p>© 2026 Dohyun Group · Hệ thống phân tích nội bộ</p>
         <div className="footer-links">
-          <span>Hệ thống phân tích tự động</span>
-          <span>•</span>
-          <span>Bảo mật dữ liệu nội bộ</span>
+          <span>Marketing Analytics Dashboard</span>
+          <span>·</span>
+          <span>Bảo mật dữ liệu</span>
         </div>
       </footer>
     </div>
