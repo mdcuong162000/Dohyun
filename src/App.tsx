@@ -456,8 +456,7 @@ export default function App() {
   };
 
   // --- FILTER STATE ---
-  // --- VIEW MODE ---
-  const [activeView, setActiveView] = useState<'ceo' | 'team'>('ceo');
+
 
   const [selectedBranch, setSelectedBranch] = useState<string>('All');
   const [selectedTeam, setSelectedTeam] = useState<string>('All');
@@ -1135,25 +1134,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── TAB SWITCHER ──────────────────────────────────── */}
-      <div className="tab-switcher">
-        <button
-          type="button"
-          className={`tab-btn ${activeView === 'ceo' ? 'tab-active' : ''}`}
-          onClick={() => setActiveView('ceo')}
-          id="tab-ceo"
-        >
-          <TrendingUp size={15} /> CEO Overview
-        </button>
-        <button
-          type="button"
-          className={`tab-btn ${activeView === 'team' ? 'tab-active' : ''}`}
-          onClick={() => setActiveView('team')}
-          id="tab-team"
-        >
-          <Users size={15} /> Team Ads
-        </button>
-      </div>
+
 
       <section className="filter-panel" id="filters">
         <div className="filter-grid">
@@ -1284,7 +1265,7 @@ export default function App() {
       {/* ══════════════════════════════════════════
            CEO VIEW
       ══════════════════════════════════════════ */}
-      {activeView === 'ceo' && (<>
+      <>
       <p className="section-title">Tổng Quan Tài Chính</p>
       <section className="kpi-grid-top">
 
@@ -1540,137 +1521,7 @@ export default function App() {
       )}
 
       {/* Bảng Nhật Ký Chi Tiết đã được ẩn theo yêu cầu */}
-      </>)}
-
-      {/* ══════════════════════════════════════════
-           TEAM ADS VIEW
-      ══════════════════════════════════════════ */}
-      {activeView === 'team' && (<>
-
-        <p className="section-title">Chỉ Số Vận Hành</p>
-        <section className="kpi-grid-top">
-          <div className="kpi-hero kpi-hero-ads">
-            <div className="kpi-hero-top">
-              <span className="kpi-hero-label">Tổng Leads (SĐT)</span>
-              <div className="kpi-hero-icon icon-blue"><Users size={18} /></div>
-            </div>
-            <div className="kpi-hero-value c-blue">{formatNumber(metrics.leads)}</div>
-            <div className="kpi-hero-sub">Chi phí trung bình / lead
-              <span className="sub-tag sub-tag-warn">{formatCurrency(metrics.costPerLead)}</span>
-            </div>
-          </div>
-
-          <div className="kpi-hero kpi-hero-roas">
-            <div className="kpi-hero-top">
-              <span className="kpi-hero-label">Khách Đến (Show-up)</span>
-              <div className="kpi-hero-icon icon-violet"><MousePointerClick size={18} /></div>
-            </div>
-            <div className="kpi-hero-value c-violet">{formatNumber(metrics.showups)}</div>
-            <div className="kpi-hero-sub">Tỷ lệ Lead → Show-up
-              <span className={`sub-tag ${metrics.leadToShowupRate >= 30 ? 'sub-tag-good' : metrics.leadToShowupRate >= 15 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
-                {metrics.leadToShowupRate.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-
-          <div className="kpi-hero kpi-hero-revenue">
-            <div className="kpi-hero-top">
-              <span className="kpi-hero-label">Chi Tiêu Ads</span>
-              <div className="kpi-hero-icon icon-emerald"><DollarSign size={18} /></div>
-            </div>
-            <div className="kpi-hero-value c-emerald">{formatCurrency(metrics.adsSpend)}</div>
-            <div className="kpi-hero-sub">Ngân sách đã dùng
-              <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : 'sub-tag-warn'}`}>ROAS {metrics.roas.toFixed(1)}x</span>
-            </div>
-          </div>
-
-          <div className="kpi-hero kpi-hero-ads-pct">
-            <div className="kpi-hero-top">
-              <span className="kpi-hero-label">Cost / Show-up</span>
-              <div className="kpi-hero-icon icon-amber"><Target size={18} /></div>
-            </div>
-            <div className="kpi-hero-value c-amber">{formatCurrency(metrics.costPerShowup)}</div>
-            <div className="kpi-hero-sub">Chi phí để 1 khách đến cơ sở
-              <span className="sub-tag sub-tag-warn">/ showup</span>
-            </div>
-          </div>
-        </section>
-
-        <p className="section-title">Xu Hướng Leads & Chi Phí</p>
-        <div className="charts-row">
-          <div className="chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">Leads & Chi Tiêu Ads Theo Ngày</h2>
-              <span className="chart-tag">Team view</span>
-            </div>
-            <div className="chart-body">
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gLeads" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f9cf9" stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor="#4f9cf9" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="gAds2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="date" stroke="#4a5568" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="left" stroke="#4a5568" fontSize={11} tickLine={false} />
-                  <YAxis yAxisId="right" orientation="right" stroke="#4a5568" fontSize={11} tickLine={false} tickFormatter={v => `${(v/1e6).toFixed(0)}M`} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0d1428', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }} labelStyle={{ color: '#f0f4ff', fontWeight: '700' }} formatter={(v: number, name: string) => name === 'Leads' ? [v, name] : [formatCurrency(v), name]} />
-                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
-                  <Area yAxisId="left" name="Leads" type="monotone" dataKey="leads" stroke="#4f9cf9" strokeWidth={2} fill="url(#gLeads)" />
-                  <Area yAxisId="right" name="Chi Tiêu Ads" type="monotone" dataKey="adsSpend" stroke="#fbbf24" strokeWidth={2} fill="url(#gAds2)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="chart-card">
-            <div className="chart-header">
-              <h2 className="chart-title">Ranking Operator</h2>
-              <span className="chart-tag">Leads & Ads</span>
-            </div>
-            <div className="chart-body" style={{ minHeight: 'auto', overflowY: 'auto' }}>
-              <div className="ranking-list">
-                {((): Array<{name:string;leads:number;adsSpend:number;revenue:number}> => {
-                  const g: {[k:string]:{name:string;leads:number;adsSpend:number;revenue:number}} = {};
-                  filteredData.forEach(r => {
-                    const k = r.operator || 'Không rõ';
-                    if (!g[k]) g[k] = {name:k,leads:0,adsSpend:0,revenue:0};
-                    g[k].leads += r.leads; g[k].adsSpend += r.ads_spend; g[k].revenue += r.revenue;
-                  });
-                  return Object.values(g).sort((a,b)=>b.leads-a.leads).slice(0,8);
-                })().map((item,i) => {
-                  const maxL = filteredData.reduce((m,r)=>Math.max(m,r.leads),1);
-                  return (
-                    <div key={item.name} className="ranking-item">
-                      <div className={`rank-num ${i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-other'}`}>{i+1}</div>
-                      <div className="rank-bar-wrap">
-                        <div className="rank-label">
-                          <span className="rank-name">{item.name}</span>
-                          <span className="rank-value" style={{color:'var(--blue)'}}>{item.leads} leads</span>
-                        </div>
-                        <div className="rank-bar-bg">
-                          <div className="rank-bar-fill" style={{width:`${(item.leads/maxL)*100}%`,background:'var(--blue)'}} />
-                        </div>
-                        <div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>
-                          Ads: {formatCurrency(item.adsSpend)} · DS: {formatCurrency(item.revenue)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bảng Nhật Ký Chi Tiết Team đã được ẩn theo yêu cầu */}
-      </>)}
+      </>
 
       {/* ══════════════════════════════════════════
            ACCORDION DRAWER FOR BRANCH DETAILS (Layer 2 & Layer 3)
