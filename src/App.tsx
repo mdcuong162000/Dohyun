@@ -59,19 +59,57 @@ interface DailyRecord {
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3a86ff', '#06d6a0', '#ff006e', '#8338ec', '#ffbe0b'];
 
-// Google Auth client instance declared outside React cycle
 let tokenClient: any = null;
 
+// Helper: Custom CSV Parser to handle commas inside double quotes correctly
+function parseCSV(text: string): string[][] {
+  const lines: string[][] = [];
+  let row: string[] = [];
+  let inQuotes = false;
+  let currentVal = '';
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+    
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentVal += '"';
+        i++; // skip next quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(currentVal);
+      currentVal = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++; // skip \n
+      }
+      row.push(currentVal);
+      lines.push(row);
+      row = [];
+      currentVal = '';
+    } else {
+      currentVal += char;
+    }
+  }
+  if (row.length > 0 || currentVal !== '') {
+    row.push(currentVal);
+    lines.push(row);
+  }
+  return lines;
+}
+
 export default function App() {
-  // --- AUTH STATE ---
+  // --- AUTH & DATA STATES ---
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     return localStorage.getItem('dohyun_access_token');
   });
   const [authError, setAuthError] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-  
-  // --- DATA STATE ---
+  const [isLiveActive, setIsLiveActive] = useState<boolean>(false);
   const [records, setRecords] = useState<DailyRecord[]>([]);
 
   // Env variables
@@ -79,101 +117,12 @@ export default function App() {
   const spreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
   const isClientIdPlaceholder = !clientId || clientId.includes('PLACEHOLDER');
 
-  // --- INITIALIZE GOOGLE OAUTH CLIENT ---
-  useEffect(() => {
-    // Load local mock data if in Demo Mode
-    if (isDemoMode) {
-      setRecords(localMockData as DailyRecord[]);
-      return;
-    }
-
-    if (!accessToken) {
-      setRecords([]);
-      return;
-    }
-
-    // Load data from Google Sheets API
-    const loadGoogleData = async () => {
-      setIsLoading(true);
-      setAuthError('');
-      try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Daily`;
-        const res = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`
-          }
-        });
-        
-        if (res.status === 401) {
-          // Token expired or invalid
-          handleLogout();
-          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        }
-
-        if (!res.ok) {
-          throw new Error(`Google API trả về mã lỗi: ${res.status} (${res.statusText})`);
-        }
-
-        const data = await res.json();
-        const parsed = parseSheetsData(data.values);
-        setRecords(parsed);
-      } catch (err: any) {
-        console.error('Fetch error:', err);
-        setAuthError(err.message || 'Lỗi khi tải dữ liệu từ Google Sheets.');
-        // Fallback to demo mode if load fails and we have no records
-        if (records.length === 0) {
-          setIsDemoMode(true);
-          setRecords(localMockData as DailyRecord[]);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadGoogleData();
-  }, [accessToken, isDemoMode]);
-
-  // Load Google Identity Services SDK library on mount
-  useEffect(() => {
-    if (isClientIdPlaceholder) return;
-
-    const initGsi = () => {
-      if ((window as any).google && (window as any).google.accounts) {
-        tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
-          callback: (response: any) => {
-            if (response.error) {
-              setAuthError(`Lỗi xác thực: ${response.error}`);
-              return;
-            }
-            if (response.access_token) {
-              localStorage.setItem('dohyun_access_token', response.access_token);
-              setAccessToken(response.access_token);
-              setIsDemoMode(false);
-            }
-          },
-        });
-      }
-    };
-
-    if ((window as any).google) {
-      initGsi();
-    } else {
-      const script = document.querySelector('script[src*="gsi/client"]');
-      if (script) {
-        script.addEventListener('load', initGsi);
-      }
-    }
-  }, [clientId, isClientIdPlaceholder]);
-
-  // --- GOOGLE SHEETS RAW ROWS PARSER ---
+  // --- PARSE GOOGLE SHEETS ROWS ---
   const parseSheetsData = (rows: any[][]): DailyRecord[] => {
     if (!rows || rows.length <= 1) return [];
     
     const headers = rows[0].map(h => String(h).trim());
-    
-    const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+    const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase().replace(/\s/g, '').includes(name.toLowerCase().replace(/\s/g, '')));
     
     const idxDate = colIndex('ngày tháng') !== -1 ? colIndex('ngày tháng') : 0;
     const idxTeam = colIndex('team');
@@ -186,9 +135,9 @@ export default function App() {
     const idxComments = colIndex('bình luận');
     const idxEngagement = colIndex('tương tác');
     const idxLeads = colIndex('sđt');
-    const idxCostLead = colIndex('giá cost \nsđt') !== -1 ? colIndex('giá cost \nsđt') : colIndex('cost \nsđt');
+    const idxCostLead = colIndex('giá cost \nsđt') !== -1 ? colIndex('giá cost \nsđt') : (colIndex('cost\nsđt') !== -1 ? colIndex('cost\nsđt') : colIndex('cost sđt'));
     const idxShowups = colIndex('khách đến');
-    const idxCostShowup = colIndex('giá cost\n khách đến') !== -1 ? colIndex('giá cost\n khách đến') : colIndex('cost\n khách đến');
+    const idxCostShowup = colIndex('giá cost\n khách đến') !== -1 ? colIndex('giá cost\n khách đến') : colIndex('cost khách đến');
     const idxRevenue = colIndex('doanh số');
     const idxAdsRatio = colIndex('%ads');
     
@@ -199,8 +148,6 @@ export default function App() {
       if (!row[idxDate] || !row[idxBranch]) continue;
       
       let dateStr = String(row[idxDate]).trim();
-      
-      // Handle Date conversions (Excel standard format is YYYY-MM-DD, Google sheets might return DD/MM/YYYY)
       if (dateStr.includes('/')) {
         const parts = dateStr.split('/');
         if (parts.length === 3) {
@@ -218,9 +165,8 @@ export default function App() {
         if (val === undefined || val === null || val === '') return 0;
         if (typeof val === 'number') return val;
         const str = String(val).trim().replace(/\s/g, '');
-        if (str === '-' || str === 'd' || str === 'đ') return 0;
+        if (str === '-' || str === 'd' || str === 'đ' || str === 'đ/sđt' || str === 'đ/khách') return 0;
         
-        // Remove currency suffix and dots
         const cleanStr = str.replace(/[^\d.,-]/g, '');
         if (cleanStr.includes('.') && !cleanStr.includes(',')) {
           const parts = cleanStr.split('.');
@@ -255,6 +201,116 @@ export default function App() {
     return parsedRecords;
   };
 
+  // --- INITIAL DATA LOAD (Direct Public CSV Fetch on mount) ---
+  useEffect(() => {
+    const tryPublicSync = async () => {
+      setIsLoading(true);
+      setAuthError('');
+      try {
+        // Try fetching Google Sheet CSV directly (works if the link sharing is set to "Anyone with link can view")
+        const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&sheet=Daily`;
+        const res = await fetch(url);
+        
+        if (!res.ok) {
+          throw new Error('Tệp chưa được bật chia sẻ công khai.');
+        }
+
+        const csvText = await res.text();
+        // If Google Sheet is private, it returns Google Login HTML page instead of CSV
+        if (csvText.includes('google-site-verification') || csvText.includes('<!DOCTYPE html>') || csvText.includes('login')) {
+          throw new Error('Tệp đang ở chế độ Riêng tư (Private). Yêu cầu đăng nhập Google.');
+        }
+
+        const rows = parseCSV(csvText);
+        const parsed = parseSheetsData(rows);
+        if (parsed.length > 0) {
+          setRecords(parsed);
+          setIsLiveActive(true);
+          setIsDemoMode(false);
+          setIsLoading(false);
+          return; // Success! Skip auth flow entirely.
+        }
+      } catch (err) {
+        console.log('[Sync] Không thể đồng bộ trực tiếp (Sheet ở chế độ riêng tư). Chuyển sang chế độ xác thực/demo.');
+      }
+
+      // If direct CSV fetch failed:
+      // Try Google Sheets API OAuth fetch if we have an active access token
+      if (accessToken) {
+        try {
+          const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Daily`;
+          const apiRes = await fetch(apiUrl, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`
+            }
+          });
+          
+          if (apiRes.status === 401) {
+            handleLogout();
+            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          }
+
+          if (!apiRes.ok) {
+            throw new Error(`Google API error: ${apiRes.status}`);
+          }
+
+          const data = await apiRes.json();
+          const parsed = parseSheetsData(data.values);
+          setRecords(parsed);
+          setIsLiveActive(true);
+          setIsDemoMode(false);
+        } catch (err: any) {
+          console.error('[Sync] Lỗi OAuth fetch:', err);
+          setAuthError(err.message || 'Lỗi khi đồng bộ qua tài khoản Google.');
+          // Default to local mock data
+          setRecords(localMockData as DailyRecord[]);
+          setIsDemoMode(true);
+        }
+      } else {
+        // No token, no public access -> default to demo mode or prompt login screen
+        // Let's set loading to false so the Login/Demo screen is shown
+        setRecords([]);
+      }
+      setIsLoading(false);
+    };
+
+    tryPublicSync();
+  }, [accessToken]);
+
+  // --- INITIALIZE GOOGLE OAUTH CLIENT SDK ---
+  useEffect(() => {
+    if (isClientIdPlaceholder) return;
+
+    const initGsi = () => {
+      if ((window as any).google && (window as any).google.accounts) {
+        tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+          callback: (response: any) => {
+            if (response.error) {
+              setAuthError(`Lỗi xác thực: ${response.error}`);
+              return;
+            }
+            if (response.access_token) {
+              localStorage.setItem('dohyun_access_token', response.access_token);
+              setAccessToken(response.access_token);
+              setIsDemoMode(false);
+            }
+          },
+        });
+      }
+    };
+
+    if ((window as any).google) {
+      initGsi();
+    } else {
+      const script = document.querySelector('script[src*="gsi/client"]');
+      if (script) {
+        script.addEventListener('load', initGsi);
+      }
+    }
+  }, [clientId, isClientIdPlaceholder]);
+
   // --- ACTIONS ---
   const handleLogin = () => {
     if (tokenClient) {
@@ -268,10 +324,13 @@ export default function App() {
     localStorage.removeItem('dohyun_access_token');
     setAccessToken(null);
     setIsDemoMode(false);
+    setIsLiveActive(false);
   };
 
   const handleEnterDemo = () => {
+    setRecords(localMockData as DailyRecord[]);
     setIsDemoMode(true);
+    setIsLiveActive(false);
   };
 
   // --- FILTER STATE ---
@@ -474,8 +533,18 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN').format(val);
   };
 
-  // --- RENDER LOGIN SCREEN IF NOT AUTHENTICATED ---
-  if (!accessToken && !isDemoMode) {
+  // --- RENDER LOADER ---
+  if (isLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner"></div>
+        <p>Đang kiểm tra kết nối Google Sheets...</p>
+      </div>
+    );
+  }
+
+  // --- RENDER LOGIN SCREEN IF NOT AUTHENTICATED & NO PUBLIC DATA ---
+  if (records.length === 0 && !isDemoMode) {
     return (
       <div className="login-screen-container">
         <div className="login-box">
@@ -493,6 +562,16 @@ export default function App() {
               </div>
             )}
 
+            <div className="alert alert-warning" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                <AlertCircle size={16} />
+                <span>Google Sheet đang khóa riêng tư (Private)</span>
+              </div>
+              <p style={{ fontSize: '11px', marginTop: '6px', opacity: 0.8, lineHeight: 1.4 }}>
+                Để tự động hóa hoàn toàn và **bỏ qua bước đăng nhập**, sếp chỉ cần bật chia sẻ Google Sheet ở quyền: **"Bất kỳ ai có đường liên kết đều có thể xem"** (Anyone with the link can view). Trang web sẽ tự động nhận diện và cập nhật live!
+              </p>
+            </div>
+
             {isClientIdPlaceholder ? (
               <div className="config-warning-box">
                 <div className="warning-header">
@@ -500,26 +579,8 @@ export default function App() {
                   <h3>Chưa thiết lập Google OAuth Client ID</h3>
                 </div>
                 <p className="warning-desc">
-                  Để xem dữ liệu thời gian thực từ Google Sheets, sếp cần đăng ký OAuth Client ID trên Google Cloud Console và dán vào tệp <code>.env.local</code>.
+                  Để xem dữ liệu thời gian thực từ Google Sheets qua tài khoản Google cá nhân bảo mật, sếp cần đăng ký OAuth Client ID trên Google Cloud Console và dán vào tệp <code>.env.local</code>.
                 </p>
-                <div className="steps-list">
-                  <div className="step-item">
-                    <span className="step-num">1</span>
-                    <span>Vào <strong>APIs & Services</strong> ➔ <strong>Credentials</strong> trong Google Cloud Console.</span>
-                  </div>
-                  <div className="step-item">
-                    <span className="step-num">2</span>
-                    <span>Tạo <strong>OAuth Client ID</strong> (Application Type: Web Application).</span>
-                  </div>
-                  <div className="step-item">
-                    <span className="step-num">3</span>
-                    <span>Đặt Authorized Javascript Origins là <code>http://localhost:5173</code> (hoặc domain Vercel).</span>
-                  </div>
-                  <div className="step-item">
-                    <span className="step-num">4</span>
-                    <span>Sao chép Client ID dán vào <code>VITE_GOOGLE_CLIENT_ID</code> trong file <code>.env.local</code> của dự án.</span>
-                  </div>
-                </div>
               </div>
             ) : null}
 
@@ -550,16 +611,6 @@ export default function App() {
     );
   }
 
-  // --- RENDER LOADER ---
-  if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Đang tải dữ liệu từ Google Sheets...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="dashboard-container">
       {/* HEADER */}
@@ -569,7 +620,9 @@ export default function App() {
           <div>
             <h1 className="header-title">DOHYUN GROUP</h1>
             <p className="header-subtitle">
-              {isDemoMode ? 'Chế độ: Dữ liệu mẫu (Offline Demo)' : 'Kết nối dữ liệu: Google Sheet Live Sync'}
+              {isDemoMode 
+                ? 'Chế độ: Dữ liệu mẫu (Offline Demo)' 
+                : (isLiveActive ? 'Đồng bộ tự động: Google Sheet Live Link 🟢' : 'Kết nối tài khoản Google')}
             </p>
           </div>
         </div>
@@ -582,21 +635,23 @@ export default function App() {
             </span>
           )}
           
-          {!isDemoMode && (
+          {isLiveActive && (
             <span className="meta-badge pulse-badge">
-              Google Sheet Live
+              Live Auto Sync
             </span>
           )}
 
-          <button 
-            type="button" 
-            className="btn btn-secondary btn-logout" 
-            onClick={handleLogout}
-            title="Đăng xuất"
-            aria-label="Đăng xuất"
-          >
-            <LogOut size={14} /> {isDemoMode ? 'Đăng nhập lại' : 'Đăng xuất'}
-          </button>
+          {(accessToken || isDemoMode) && (
+            <button 
+              type="button" 
+              className="btn btn-secondary btn-logout" 
+              onClick={handleLogout}
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+            >
+              <LogOut size={14} /> {isDemoMode ? 'Đăng nhập lại' : 'Đăng xuất'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -695,17 +750,15 @@ export default function App() {
           <span className="results-count">Tìm thấy <strong>{filteredData.length}</strong> chiến dịch ngày</span>
           
           <div className="action-buttons-group">
-            {!isDemoMode && (
-              <a 
-                href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}`}
-                target="_blank" 
-                rel="noreferrer"
-                className="btn btn-secondary"
-                style={{ marginRight: '8px' }}
-              >
-                <FileSpreadsheet size={14} /> Mở Google Sheet
-              </a>
-            )}
+            <a 
+              href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}`}
+              target="_blank" 
+              rel="noreferrer"
+              className="btn btn-secondary"
+              style={{ marginRight: '8px' }}
+            >
+              <FileSpreadsheet size={14} /> Mở Google Sheet
+            </a>
             
             <button 
               type="button" 
