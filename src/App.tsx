@@ -632,6 +632,9 @@ export default function App() {
                   <span>Không thể tải dữ liệu</span>
                 </div>
                 <p style={{ fontSize: '12px', marginTop: '6px', lineHeight: 1.4 }}>{authError}</p>
+                <p style={{ fontSize: '10px', marginTop: '6px', opacity: 0.7, wordBreak: 'break-all' }}>
+                  ID bảng tính đang gọi: <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 4px', borderRadius: '4px' }}>{spreadsheetId}</code>
+                </p>
               </div>
             )}
 
