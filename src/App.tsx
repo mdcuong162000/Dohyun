@@ -136,12 +136,20 @@ export default function App() {
     if (!rows || rows.length <= 1) return [];
     
     const headers = rows[0].map(h => String(h).trim());
-    const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase().replace(/\s/g, '').includes(name.toLowerCase().replace(/\s/g, '')));
+    const colIndex = (name: string, excludeName?: string) => {
+      const target = name.toLowerCase().replace(/\s/g, '');
+      const exclude = excludeName ? excludeName.toLowerCase().replace(/\s/g, '') : null;
+      return headers.findIndex(h => {
+        const val = h.toLowerCase().replace(/\s/g, '');
+        if (exclude && val.includes(exclude)) return false;
+        return val.includes(target);
+      });
+    };
     
     const idxDate = colIndex('ngày tháng') !== -1 ? colIndex('ngày tháng') : 0;
     const idxTeam = colIndex('team');
     const idxOperator = colIndex('người thực hiện');
-    const idxBranch = colIndex('chi nhánh');
+    const idxBranch = colIndex('chi nhánh', 'ngày tháng');
     const idxBm = colIndex('bm');
     const idxService = colIndex('dịch vụ');
     const idxAdsSpend = colIndex('chi tiêu ads');
@@ -181,15 +189,22 @@ export default function App() {
         const str = String(val).trim().replace(/\s/g, '');
         if (str === '-' || str === 'd' || str === 'đ' || str === 'đ/sđt' || str === 'đ/khách') return 0;
         
+        const isPercent = str.includes('%');
         const cleanStr = str.replace(/[^\d.,-]/g, '');
+        let num = 0;
         if (cleanStr.includes('.') && !cleanStr.includes(',')) {
           const parts = cleanStr.split('.');
           if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
-            return parseFloat(cleanStr.replace(/\./g, ''));
+            num = parseFloat(cleanStr.replace(/\./g, ''));
+          } else {
+            num = parseFloat(cleanStr);
           }
-          return parseFloat(cleanStr);
+        } else {
+          num = parseFloat(cleanStr.replace(/,/g, ''));
         }
-        return parseFloat(cleanStr.replace(/,/g, ''));
+        
+        if (isNaN(num)) return 0;
+        return isPercent ? num / 100 : num;
       };
 
       parsedRecords.push({
@@ -625,10 +640,8 @@ export default function App() {
 
   // avg ads ratio
   const avgAdsRatio = useMemo(() => {
-    const valid = filteredData.filter(r => r.ads_ratio > 0);
-    if (!valid.length) return 0;
-    return valid.reduce((s, r) => s + r.ads_ratio, 0) / valid.length * 100;
-  }, [filteredData]);
+    return metrics.revenue > 0 ? (metrics.adsSpend / metrics.revenue) * 100 : 0;
+  }, [metrics]);
 
   // --- RENDER LOADER ---
   if (isLoading) {
