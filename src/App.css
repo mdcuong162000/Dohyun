@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap');
+
 /* ── TAB SWITCHER ───────────────────────────────────────── */
 .tab-switcher {
   display: flex; gap: 6px;
@@ -29,8 +31,6 @@
 
    Premium Dark UI with glassmorphism & micro-animations
    ============================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap');
 
 :root {
   /* --- Background --- */
@@ -342,6 +342,8 @@ body {
 
 /* ── FILTER PANEL ─────────────────────────────────────────── */
 .filter-panel {
+  position: relative;
+  z-index: 100;
   background: var(--bg-card); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border); border-radius: var(--radius-lg);
   padding: 20px 24px; box-shadow: var(--shadow-card);
@@ -385,6 +387,8 @@ option { background: #0d1428; }
    CEO KPI OVERVIEW — ROW 1: Big 4 KPIs
 ══════════════════════════════════════════════════════════ */
 .kpi-grid-top {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
@@ -483,6 +487,8 @@ option { background: #0d1428; }
 
 /* ── ROW 2: Funnel KPIs ───────────────────────────────────── */
 .kpi-grid-funnel {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
@@ -739,3 +745,381 @@ option { background: #0d1428; }
   .filter-actions { flex-direction: column; align-items: flex-start; }
   .table-pagination { flex-direction: column; align-items: flex-start; }
 }
+
+/* ── DATE RANGE PICKER (Facebook Ads Manager Style) ───────────────── */
+.date-picker-group {
+  position: relative;
+}
+
+.datepicker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 10px 14px;
+  background: rgba(10, 16, 30, 0.8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: 13px;
+  min-height: 41px;
+  transition: var(--transition);
+  user-select: none;
+}
+
+.datepicker-trigger:hover {
+  border-color: var(--border-hover);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.datepicker-trigger-text {
+  flex-grow: 1;
+  margin-left: 8px;
+  margin-right: 8px;
+  text-align: left;
+  font-weight: 500;
+}
+
+.datepicker-trigger .chevron-icon {
+  color: var(--text-2);
+  transition: var(--transition);
+}
+
+.datepicker-trigger:hover .chevron-icon {
+  color: var(--text-1);
+}
+
+/* Popover Panel */
+.datepicker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1000;
+  width: 760px;
+  background: #080d1a;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.datepicker-popover-body {
+  display: flex;
+}
+
+/* Sidebar Presets */
+.datepicker-sidebar {
+  width: 180px;
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.15);
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 6px 6px 4px;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 6px;
+}
+
+.preset-btn {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.preset-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-1);
+}
+
+.preset-btn.active {
+  background: var(--blue-dim);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+/* Main Calendar Section */
+.datepicker-main {
+  flex: 1;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.calendars-container {
+  display: flex;
+  gap: 24px;
+}
+
+.calendar-month {
+  width: 252px;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 12px;
+  height: 24px;
+}
+
+.calendar-nav-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: var(--transition);
+  outline: none;
+}
+
+.calendar-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-1);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+/* Day Cell styling */
+.calendar-day-cell {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-1);
+  position: relative;
+  user-select: none;
+}
+
+.calendar-day-cell:not(.empty):not(.disabled):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.calendar-day-cell.empty {
+  cursor: default;
+}
+
+.calendar-day-cell.disabled {
+  color: var(--text-3);
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+/* Selected & Range States */
+.calendar-day-cell.selected-start {
+  background: var(--blue) !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.calendar-day-cell.selected-end {
+  background: var(--blue) !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* Single date selection fallback (when start === end) */
+.calendar-day-cell.selected-start.selected-end {
+  border-radius: 6px !important;
+}
+
+.calendar-day-cell.in-range {
+  background: var(--blue-dim) !important;
+  color: var(--blue);
+}
+
+.calendar-day-cell.in-hover-range {
+  background: rgba(79, 156, 249, 0.05) !important;
+  border-top: 1px dashed rgba(79, 156, 249, 0.25);
+  border-bottom: 1px dashed rgba(79, 156, 249, 0.25);
+}
+
+/* Footer & Actions */
+.datepicker-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 12px;
+}
+
+.timezone-text {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.datepicker-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-inputs-preview {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+}
+
+.preview-date-input {
+  background: transparent;
+  border: none;
+  color: var(--text-1);
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 500;
+  width: 80px;
+  text-align: center;
+  outline: none;
+}
+
+.date-inputs-preview .separator {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.btn-actions-group {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-actions-group .btn {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.btn-actions-group .btn-apply {
+  font-weight: 600;
+}
+
+/* ── RESPONSIVE DATE PICKER ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  .datepicker-popover {
+    width: calc(100vw - 24px);
+    right: -12px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .datepicker-popover-body {
+    flex-direction: column;
+  }
+
+  .datepicker-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    gap: 6px;
+    white-space: nowrap;
+    max-height: 52px;
+  }
+
+  .datepicker-sidebar::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .preset-btn {
+    padding: 4px 10px;
+  }
+
+  .sidebar-section-title,
+  .sidebar-divider {
+    display: none;
+  }
+
+  .datepicker-main {
+    padding: 14px;
+  }
+
+  .calendars-container {
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .datepicker-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .date-inputs-preview {
+    justify-content: center;
+  }
+
+  .btn-actions-group {
+    justify-content: flex-end;
+  }
+}
+

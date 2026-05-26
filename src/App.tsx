@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   DollarSign, 
   Users, 
@@ -10,6 +10,7 @@ import {
   Scissors, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
   RefreshCw,
   Calendar,
   MousePointerClick,
@@ -459,6 +460,346 @@ export default function App() {
     return { minDate: dates[0], maxDate: dates[dates.length - 1] };
   }, [records]);
 
+  // --- CUSTOM DATE RANGE PICKER STATES (Facebook Ads Manager Style) ---
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
+  const [tempStartDate, setTempStartDate] = useState<string>('');
+  const [tempEndDate, setTempEndDate] = useState<string>('');
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+  
+  // Left calendar month state (Date object pointing to the first day of that month)
+  const [leftCalendarMonth, setLeftCalendarMonth] = useState<Date>(() => {
+    return new Date(2026, 4, 1); // Default to May 2026 since data is in 2026
+  });
+
+  // Jump to the latest available data month on load
+  useEffect(() => {
+    if (maxDate) {
+      const maxDateObj = new Date(maxDate);
+      setLeftCalendarMonth(new Date(maxDateObj.getFullYear(), maxDateObj.getMonth(), 1));
+    }
+  }, [maxDate]);
+
+  const rightCalendarMonth = useMemo(() => {
+    return new Date(leftCalendarMonth.getFullYear(), leftCalendarMonth.getMonth() + 1, 1);
+  }, [leftCalendarMonth]);
+
+  const handlePrevMonth = () => {
+    setLeftCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setLeftCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleDayClick = (dateStr: string) => {
+    if (!tempStartDate || (tempStartDate && tempEndDate)) {
+      setTempStartDate(dateStr);
+      setTempEndDate('');
+    } else {
+      if (dateStr < tempStartDate) {
+        setTempStartDate(dateStr);
+      } else {
+        setTempEndDate(dateStr);
+      }
+    }
+  };
+
+  const applyPreset = (preset: string) => {
+    const today = new Date(); // Systems says today is 2026-05-26
+    let start = '';
+    let end = '';
+    
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    switch (preset) {
+      case 'today':
+        start = formatDate(today);
+        end = formatDate(today);
+        break;
+      case 'yesterday': {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        start = formatDate(yesterday);
+        end = formatDate(yesterday);
+        break;
+      }
+      case 'todayAndYesterday': {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        start = formatDate(yesterday);
+        end = formatDate(today);
+        break;
+      }
+      case 'last7': {
+        const startD = new Date(today);
+        startD.setDate(today.getDate() - 6);
+        start = formatDate(startD);
+        end = formatDate(today);
+        break;
+      }
+      case 'last14': {
+        const startD = new Date(today);
+        startD.setDate(today.getDate() - 13);
+        start = formatDate(startD);
+        end = formatDate(today);
+        break;
+      }
+      case 'last28': {
+        const startD = new Date(today);
+        startD.setDate(today.getDate() - 27);
+        start = formatDate(startD);
+        end = formatDate(today);
+        break;
+      }
+      case 'last30': {
+        const startD = new Date(today);
+        startD.setDate(today.getDate() - 29);
+        start = formatDate(startD);
+        end = formatDate(today);
+        break;
+      }
+      case 'thisWeek': {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - distanceToMonday);
+        start = formatDate(monday);
+        end = formatDate(today);
+        break;
+      }
+      case 'lastWeek': {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - distanceToMonday - 7);
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6);
+        start = formatDate(lastMonday);
+        end = formatDate(lastSunday);
+        break;
+      }
+      case 'thisMonth': {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        start = formatDate(firstDay);
+        end = formatDate(today);
+        break;
+      }
+      case 'lastMonth': {
+        const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+        start = formatDate(firstDay);
+        end = formatDate(lastDay);
+        break;
+      }
+      case 'allTime':
+        start = minDate || '';
+        end = maxDate || '';
+        break;
+      default:
+        break;
+    }
+    
+    setTempStartDate(start);
+    setTempEndDate(end);
+    
+    if (end) {
+      const endDateObj = new Date(end);
+      setLeftCalendarMonth(new Date(endDateObj.getFullYear(), endDateObj.getMonth(), 1));
+    }
+  };
+
+  const getDateRangeLabel = () => {
+    if (!startDate && !endDate) return 'Tối đa';
+    
+    const formatDisplay = (str: string) => {
+      if (!str) return '';
+      const parts = str.split('-');
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    };
+
+    if (startDate === endDate) {
+      return `Ngày: ${formatDisplay(startDate)}`;
+    }
+    return `${formatDisplay(startDate)} - ${formatDisplay(endDate)}`;
+  };
+
+  const handleUpdateDateRange = () => {
+    setStartDate(tempStartDate);
+    setEndDate(tempEndDate || tempStartDate);
+    setIsDatePickerOpen(false);
+    setCurrentPage(1);
+  };
+
+  const handleCancelDateRange = () => {
+    setTempStartDate(startDate);
+    setTempEndDate(endDate);
+    setIsDatePickerOpen(false);
+  };
+
+  const getActivePreset = () => {
+    const today = new Date();
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const todayStr = formatDate(today);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = formatDate(yesterday);
+
+    const todayAndYesterdayStartStr = yesterdayStr;
+
+    const start7 = new Date(today);
+    start7.setDate(today.getDate() - 6);
+    const start7Str = formatDate(start7);
+
+    const start14 = new Date(today);
+    start14.setDate(today.getDate() - 13);
+    const start14Str = formatDate(start14);
+
+    const start28 = new Date(today);
+    start28.setDate(today.getDate() - 27);
+    const start28Str = formatDate(start28);
+
+    const start30 = new Date(today);
+    start30.setDate(today.getDate() - 29);
+    const start30Str = formatDate(start30);
+
+    const currentDay = today.getDay();
+    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const thisWeekMonday = new Date(today);
+    thisWeekMonday.setDate(today.getDate() - distanceToMonday);
+    const thisWeekMondayStr = formatDate(thisWeekMonday);
+
+    const lastWeekMonday = new Date(today);
+    lastWeekMonday.setDate(today.getDate() - distanceToMonday - 7);
+    const lastWeekMondayStr = formatDate(lastWeekMonday);
+    const lastWeekSunday = new Date(lastWeekMonday);
+    lastWeekSunday.setDate(lastWeekMonday.getDate() + 6);
+    const lastWeekSundayStr = formatDate(lastWeekSunday);
+
+    const firstThisMonth = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    const firstLastMonth = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+    const lastLastMonth = formatDate(new Date(today.getFullYear(), today.getMonth(), 0));
+
+    if (tempStartDate === todayStr && tempEndDate === todayStr) return 'today';
+    if (tempStartDate === yesterdayStr && tempEndDate === yesterdayStr) return 'yesterday';
+    if (tempStartDate === todayAndYesterdayStartStr && tempEndDate === todayStr) return 'todayAndYesterday';
+    if (tempStartDate === start7Str && tempEndDate === todayStr) return 'last7';
+    if (tempStartDate === start14Str && tempEndDate === todayStr) return 'last14';
+    if (tempStartDate === start28Str && tempEndDate === todayStr) return 'last28';
+    if (tempStartDate === start30Str && tempEndDate === todayStr) return 'last30';
+    if (tempStartDate === thisWeekMondayStr && tempEndDate === todayStr) return 'thisWeek';
+    if (tempStartDate === lastWeekMondayStr && tempEndDate === lastWeekSundayStr) return 'lastWeek';
+    if (tempStartDate === firstThisMonth && tempEndDate === todayStr) return 'thisMonth';
+    if (tempStartDate === firstLastMonth && tempEndDate === lastLastMonth) return 'lastMonth';
+    if (tempStartDate === minDate && tempEndDate === maxDate) return 'allTime';
+    return '';
+  };
+
+  // Sync temp state with actual state when actual state changes
+  useEffect(() => {
+    setTempStartDate(startDate);
+    setTempEndDate(endDate);
+  }, [startDate, endDate]);
+
+  // Click outside listener
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setIsDatePickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const renderCalendarMonth = (monthDate: Date, isLeft: boolean) => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth(); // 0-indexed
+    
+    // Get first day of the month (0: Sunday, 1: Monday, ...)
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    
+    // Get number of days in the month
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    
+    const days = [];
+    
+    // Empty cells before the first day of the month
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push(<div key={`empty-${i}`} className="calendar-day-cell empty" />);
+    }
+    
+    // Render days
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isSelectedStart = tempStartDate === dateStr;
+      const isSelectedEnd = tempEndDate === dateStr;
+      const isInRange = tempStartDate && tempEndDate && dateStr > tempStartDate && dateStr < tempEndDate;
+      const isInHoverRange = tempStartDate && !tempEndDate && hoveredDate && dateStr > tempStartDate && dateStr <= hoveredDate;
+      const isDayDisabled = (minDate && dateStr < minDate) || (maxDate && dateStr > maxDate);
+      
+      let cellClass = 'calendar-day-cell';
+      if (isSelectedStart) cellClass += ' selected-start';
+      if (isSelectedEnd) cellClass += ' selected-end';
+      if (isInRange) cellClass += ' in-range';
+      if (isInHoverRange) cellClass += ' in-hover-range';
+      if (isDayDisabled) cellClass += ' disabled';
+      
+      days.push(
+        <div
+          key={`day-${d}`}
+          className={cellClass}
+          onClick={() => !isDayDisabled && handleDayClick(dateStr)}
+          onMouseEnter={() => !isDayDisabled && !tempEndDate && setHoveredDate(dateStr)}
+        >
+          {d}
+        </div>
+      );
+    }
+    
+    const monthName = `Tháng ${month + 1}`;
+    
+    return (
+      <div className="calendar-month">
+        <div className="calendar-header">
+          {isLeft ? (
+            <button type="button" className="calendar-nav-btn" onClick={handlePrevMonth} aria-label="Tháng trước">
+              <ChevronLeft size={16} />
+            </button>
+          ) : <div />}
+          <span>{monthName} {year}</span>
+          {!isLeft ? (
+            <button type="button" className="calendar-nav-btn" onClick={handleNextMonth} aria-label="Tháng sau">
+              <ChevronRight size={16} />
+            </button>
+          ) : <div />}
+        </div>
+        <div className="calendar-weekdays">
+          {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(wd => (
+            <div key={wd}>{wd}</div>
+          ))}
+        </div>
+        <div className="calendar-grid" onMouseLeave={() => setHoveredDate(null)}>
+          {days}
+        </div>
+      </div>
+    );
+  };
+
   // --- FILTERED DATA ---
   const filteredData = useMemo(() => {
     return records.filter(r => {
@@ -806,13 +1147,75 @@ export default function App() {
               </select>
             </div>
           </div>
-          <div className="filter-group">
-            <label htmlFor="start-date-picker">Từ ngày</label>
-            <input type="date" id="start-date-picker" value={startDate} min={minDate} max={maxDate} onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }} />
-          </div>
-          <div className="filter-group">
-            <label htmlFor="end-date-picker">Đến ngày</label>
-            <input type="date" id="end-date-picker" value={endDate} min={minDate} max={maxDate} onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }} />
+          <div className="filter-group date-picker-group" ref={datePickerRef}>
+            <label>Khoảng ngày</label>
+            <div className="datepicker-trigger" onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}>
+              <Calendar size={15} className="select-icon" />
+              <span className="datepicker-trigger-text">{getDateRangeLabel()}</span>
+              <ChevronDown size={15} className="chevron-icon" />
+            </div>
+
+            {isDatePickerOpen && (
+              <div className="datepicker-popover glassmorphic-panel">
+                <div className="datepicker-popover-body">
+                  {/* Cột trái: presets */}
+                  <div className="datepicker-sidebar">
+                    <div className="sidebar-section-title">Đã dùng mới đây</div>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'today' ? 'active' : ''}`} onClick={() => applyPreset('today')}>Hôm nay</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'thisMonth' ? 'active' : ''}`} onClick={() => applyPreset('thisMonth')}>Tháng này</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'allTime' ? 'active' : ''}`} onClick={() => applyPreset('allTime')}>Tối đa</button>
+                    <div className="sidebar-divider" />
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'today' ? 'active' : ''}`} onClick={() => applyPreset('today')}>Hôm nay</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'yesterday' ? 'active' : ''}`} onClick={() => applyPreset('yesterday')}>Hôm qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'todayAndYesterday' ? 'active' : ''}`} onClick={() => applyPreset('todayAndYesterday')}>Hôm nay và hôm qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'last7' ? 'active' : ''}`} onClick={() => applyPreset('last7')}>7 ngày qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'last14' ? 'active' : ''}`} onClick={() => applyPreset('last14')}>14 ngày qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'last28' ? 'active' : ''}`} onClick={() => applyPreset('last28')}>28 ngày qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'last30' ? 'active' : ''}`} onClick={() => applyPreset('last30')}>30 ngày qua</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'thisWeek' ? 'active' : ''}`} onClick={() => applyPreset('thisWeek')}>Tuần này</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'lastWeek' ? 'active' : ''}`} onClick={() => applyPreset('lastWeek')}>Tuần trước</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'thisMonth' ? 'active' : ''}`} onClick={() => applyPreset('thisMonth')}>Tháng này</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'lastMonth' ? 'active' : ''}`} onClick={() => applyPreset('lastMonth')}>Tháng trước</button>
+                    <button type="button" className={`preset-btn ${getActivePreset() === 'allTime' ? 'active' : ''}`} onClick={() => applyPreset('allTime')}>Tối đa</button>
+                  </div>
+
+                  {/* Cột phải: calendars */}
+                  <div className="datepicker-main">
+                    <div className="calendars-container">
+                      {renderCalendarMonth(leftCalendarMonth, true)}
+                      {renderCalendarMonth(rightCalendarMonth, false)}
+                    </div>
+
+                    <div className="datepicker-footer">
+                      <div className="timezone-text">Ngày hiển thị theo Asia/Ho_Chi_Minh</div>
+                      <div className="datepicker-actions-row">
+                        <div className="date-inputs-preview">
+                          <input 
+                            type="text" 
+                            className="preview-date-input" 
+                            value={tempStartDate ? tempStartDate.split('-').reverse().join('/') : ''} 
+                            placeholder="Từ ngày"
+                            readOnly 
+                          />
+                          <span className="separator">-</span>
+                          <input 
+                            type="text" 
+                            className="preview-date-input" 
+                            value={tempEndDate ? tempEndDate.split('-').reverse().join('/') : ''} 
+                            placeholder="Đến ngày"
+                            readOnly 
+                          />
+                        </div>
+                        <div className="btn-actions-group">
+                          <button type="button" className="btn btn-secondary btn-cancel" onClick={handleCancelDateRange}>Hủy</button>
+                          <button type="button" className="btn btn-primary btn-apply" onClick={handleUpdateDateRange}>Cập nhật</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="filter-group">
             <label htmlFor="search-input">Tìm kiếm</label>
