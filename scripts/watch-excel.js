@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 
-const EXCEL_FILE = "/Users/trangle/Downloads/BÁO CÁO TỔNG DOHYUN GROUP.xlsx";
+const EXCEL_FILE = "/Users/trangle/Downloads/MỤC TIÊU ADS PERFORMANCE.xlsx";
 const PARSER_SCRIPT = "/Users/trangle/.gemini/antigravity/brain/bab73d74-70b3-4630-b7f1-5d9460560be4/scratch/parse_excel.py";
 
 console.log(`[Watcher] Khởi động giám sát file Excel: ${EXCEL_FILE}`);

@@ -3,7 +3,7 @@ import {
   DollarSign, 
   Users, 
   TrendingUp, 
-  ArrowUpDown, 
+  // ArrowUpDown, 
   Search, 
   Building2, 
   User, 
@@ -61,6 +61,40 @@ interface DailyRecord {
 }
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3a86ff', '#06d6a0', '#ff006e', '#8338ec', '#ffbe0b'];
+
+const BRANCH_TARGETS: Record<string, Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }>> = {
+  '2026-05': {
+    'Đà Nẵng': { revenue: 2643447692, adsSpend: 700000000, leads: 1444, showups: 389 },
+    'Nha Trang': { revenue: 1500000000, adsSpend: 400000000, leads: 800, showups: 200 },
+    'Hồ Chí Minh': { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 },
+    'BMT': { revenue: 400000000, adsSpend: 120000000, leads: 200, showups: 50 },
+    'Long Xuyên': { revenue: 300000000, adsSpend: 90000000, leads: 150, showups: 40 }
+  },
+  '2026-04': {
+    'Đà Nẵng': { revenue: 2500000000, adsSpend: 750000000, leads: 1400, showups: 380 },
+    'Nha Trang': { revenue: 1400000000, adsSpend: 380000000, leads: 750, showups: 190 },
+    'Hồ Chí Minh': { revenue: 480000000, adsSpend: 140000000, leads: 280, showups: 75 },
+    'BMT': { revenue: 380000000, adsSpend: 110000000, leads: 190, showups: 45 },
+    'Long Xuyên': { revenue: 280000000, adsSpend: 85000000, leads: 140, showups: 38 }
+  }
+};
+
+const getBranchTarget = (branchName: string, dateStr: string) => {
+  const monthKey = dateStr || '2026-05';
+  if (BRANCH_TARGETS[monthKey] && BRANCH_TARGETS[monthKey][branchName]) {
+    return BRANCH_TARGETS[monthKey][branchName];
+  }
+  
+  const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
+    'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
+    'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
+    'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
+    'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
+    'Long Xuyên': { revenue: 250000000, adsSpend: 80000000, leads: 130, showups: 35 }
+  };
+  return defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
+};
+
 
 let tokenClient: any = null;
 
@@ -433,10 +467,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Table sorting & pagination
-  const [sortBy, setSortBy] = useState<keyof DailyRecord>('date');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  // const [sortBy, setSortBy] = useState<keyof DailyRecord>('date');
+  // const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  // @ts-ignore
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
+  // const [pageSize, setPageSize] = useState<number>(10);
 
   // --- DERIVED METADATA ---
   const uniqueBranches = useMemo(() => {
@@ -460,12 +495,24 @@ export default function App() {
     return { minDate: dates[0], maxDate: dates[dates.length - 1] };
   }, [records]);
 
+  const availableMonths = useMemo(() => {
+    if (!records.length) return [];
+    const monthsSet = new Set<string>(); // "2026-05", "2026-04", etc.
+    records.forEach(r => {
+      if (r.date && r.date.length >= 7) {
+        monthsSet.add(r.date.substring(0, 7));
+      }
+    });
+    return Array.from(monthsSet).sort().reverse();
+  }, [records]);
+
   // --- CUSTOM DATE RANGE PICKER STATES (Facebook Ads Manager Style) ---
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [tempStartDate, setTempStartDate] = useState<string>('');
   const [tempEndDate, setTempEndDate] = useState<string>('');
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
+  const [selectedDetailBranch, setSelectedDetailBranch] = useState<string | null>(null);
   
   // Left calendar month state (Date object pointing to the first day of that month)
   const [leftCalendarMonth, setLeftCalendarMonth] = useState<Date>(() => {
@@ -517,92 +564,105 @@ export default function App() {
       return `${year}-${month}-${day}`;
     };
 
-    switch (preset) {
-      case 'today':
-        start = formatDate(today);
-        end = formatDate(today);
-        break;
-      case 'yesterday': {
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
-        start = formatDate(yesterday);
-        end = formatDate(yesterday);
-        break;
+    if (preset.startsWith('month:')) {
+      const cleaned = preset.replace('-', ':'); // support "month:2026-05" -> "month:2026:05"
+      const parts = cleaned.split(':'); // ["month", "2026", "05"]
+      const year = parseInt(parts[1]);
+      const month = parseInt(parts[2]);
+      
+      const firstDay = new Date(year, month - 1, 1);
+      const lastDay = new Date(year, month, 0);
+      
+      start = formatDate(firstDay);
+      end = formatDate(lastDay);
+    } else {
+      switch (preset) {
+        case 'today':
+          start = formatDate(today);
+          end = formatDate(today);
+          break;
+        case 'yesterday': {
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          start = formatDate(yesterday);
+          end = formatDate(yesterday);
+          break;
+        }
+        case 'todayAndYesterday': {
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          start = formatDate(yesterday);
+          end = formatDate(today);
+          break;
+        }
+        case 'last7': {
+          const startD = new Date(today);
+          startD.setDate(today.getDate() - 6);
+          start = formatDate(startD);
+          end = formatDate(today);
+          break;
+        }
+        case 'last14': {
+          const startD = new Date(today);
+          startD.setDate(today.getDate() - 13);
+          start = formatDate(startD);
+          end = formatDate(today);
+          break;
+        }
+        case 'last28': {
+          const startD = new Date(today);
+          startD.setDate(today.getDate() - 27);
+          start = formatDate(startD);
+          end = formatDate(today);
+          break;
+        }
+        case 'last30': {
+          const startD = new Date(today);
+          startD.setDate(today.getDate() - 29);
+          start = formatDate(startD);
+          end = formatDate(today);
+          break;
+        }
+        case 'thisWeek': {
+          const currentDay = today.getDay();
+          const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+          const monday = new Date(today);
+          monday.setDate(today.getDate() - distanceToMonday);
+          start = formatDate(monday);
+          end = formatDate(today);
+          break;
+        }
+        case 'lastWeek': {
+          const currentDay = today.getDay();
+          const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+          const lastMonday = new Date(today);
+          lastMonday.setDate(today.getDate() - distanceToMonday - 7);
+          const lastSunday = new Date(lastMonday);
+          lastSunday.setDate(lastMonday.getDate() + 6);
+          start = formatDate(lastMonday);
+          end = formatDate(lastSunday);
+          break;
+        }
+        case 'thisMonth': {
+          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+          start = formatDate(firstDay);
+          end = formatDate(today);
+          break;
+        }
+        case 'lastMonth': {
+          const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+          start = formatDate(firstDay);
+          end = formatDate(lastDay);
+          break;
+        }
+        case 'allTime':
+          start = minDate || '';
+          end = maxDate || '';
+          break;
+        default:
+          break;
       }
-      case 'todayAndYesterday': {
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
-        start = formatDate(yesterday);
-        end = formatDate(today);
-        break;
-      }
-      case 'last7': {
-        const startD = new Date(today);
-        startD.setDate(today.getDate() - 6);
-        start = formatDate(startD);
-        end = formatDate(today);
-        break;
-      }
-      case 'last14': {
-        const startD = new Date(today);
-        startD.setDate(today.getDate() - 13);
-        start = formatDate(startD);
-        end = formatDate(today);
-        break;
-      }
-      case 'last28': {
-        const startD = new Date(today);
-        startD.setDate(today.getDate() - 27);
-        start = formatDate(startD);
-        end = formatDate(today);
-        break;
-      }
-      case 'last30': {
-        const startD = new Date(today);
-        startD.setDate(today.getDate() - 29);
-        start = formatDate(startD);
-        end = formatDate(today);
-        break;
-      }
-      case 'thisWeek': {
-        const currentDay = today.getDay();
-        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - distanceToMonday);
-        start = formatDate(monday);
-        end = formatDate(today);
-        break;
-      }
-      case 'lastWeek': {
-        const currentDay = today.getDay();
-        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
-        const lastMonday = new Date(today);
-        lastMonday.setDate(today.getDate() - distanceToMonday - 7);
-        const lastSunday = new Date(lastMonday);
-        lastSunday.setDate(lastMonday.getDate() + 6);
-        start = formatDate(lastMonday);
-        end = formatDate(lastSunday);
-        break;
-      }
-      case 'thisMonth': {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        start = formatDate(firstDay);
-        end = formatDate(today);
-        break;
-      }
-      case 'lastMonth': {
-        const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-        start = formatDate(firstDay);
-        end = formatDate(lastDay);
-        break;
-      }
-      case 'allTime':
-        start = minDate || '';
-        end = maxDate || '';
-        break;
-      default:
-        break;
     }
     
     setTempStartDate(start);
@@ -657,53 +717,26 @@ export default function App() {
     yesterday.setDate(today.getDate() - 1);
     const yesterdayStr = formatDate(yesterday);
 
-    const todayAndYesterdayStartStr = yesterdayStr;
-
-    const start7 = new Date(today);
-    start7.setDate(today.getDate() - 6);
-    const start7Str = formatDate(start7);
-
-    const start14 = new Date(today);
-    start14.setDate(today.getDate() - 13);
-    const start14Str = formatDate(start14);
-
-    const start28 = new Date(today);
-    start28.setDate(today.getDate() - 27);
-    const start28Str = formatDate(start28);
-
-    const start30 = new Date(today);
-    start30.setDate(today.getDate() - 29);
-    const start30Str = formatDate(start30);
-
-    const currentDay = today.getDay();
-    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const thisWeekMonday = new Date(today);
-    thisWeekMonday.setDate(today.getDate() - distanceToMonday);
-    const thisWeekMondayStr = formatDate(thisWeekMonday);
-
-    const lastWeekMonday = new Date(today);
-    lastWeekMonday.setDate(today.getDate() - distanceToMonday - 7);
-    const lastWeekMondayStr = formatDate(lastWeekMonday);
-    const lastWeekSunday = new Date(lastWeekMonday);
-    lastWeekSunday.setDate(lastWeekMonday.getDate() + 6);
-    const lastWeekSundayStr = formatDate(lastWeekSunday);
-
     const firstThisMonth = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
-    const firstLastMonth = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-    const lastLastMonth = formatDate(new Date(today.getFullYear(), today.getMonth(), 0));
 
-    if (tempStartDate === todayStr && tempEndDate === todayStr) return 'today';
     if (tempStartDate === yesterdayStr && tempEndDate === yesterdayStr) return 'yesterday';
-    if (tempStartDate === todayAndYesterdayStartStr && tempEndDate === todayStr) return 'todayAndYesterday';
-    if (tempStartDate === start7Str && tempEndDate === todayStr) return 'last7';
-    if (tempStartDate === start14Str && tempEndDate === todayStr) return 'last14';
-    if (tempStartDate === start28Str && tempEndDate === todayStr) return 'last28';
-    if (tempStartDate === start30Str && tempEndDate === todayStr) return 'last30';
-    if (tempStartDate === thisWeekMondayStr && tempEndDate === todayStr) return 'thisWeek';
-    if (tempStartDate === lastWeekMondayStr && tempEndDate === lastWeekSundayStr) return 'lastWeek';
     if (tempStartDate === firstThisMonth && tempEndDate === todayStr) return 'thisMonth';
-    if (tempStartDate === firstLastMonth && tempEndDate === lastLastMonth) return 'lastMonth';
     if (tempStartDate === minDate && tempEndDate === maxDate) return 'allTime';
+
+    // Check dynamic months
+    for (const m of availableMonths) {
+      const [y, mm] = m.split('-');
+      const year = parseInt(y);
+      const month = parseInt(mm);
+      const firstDayStr = `${y}-${mm}-01`;
+      const lastDay = new Date(year, month, 0);
+      const lastDayStr = `${y}-${mm}-${String(lastDay.getDate()).padStart(2, '0')}`;
+      
+      if (tempStartDate === firstDayStr && tempEndDate === lastDayStr) {
+        return `month:${m}`;
+      }
+    }
+
     return '';
   };
 
@@ -901,6 +934,7 @@ export default function App() {
   }, [filteredData]);
 
   // --- SORTED & PAGINATED TABLE DATA ---
+  /*
   const sortedData = useMemo(() => {
     const sorted = [...filteredData];
     sorted.sort((a, b) => {
@@ -916,7 +950,9 @@ export default function App() {
     });
     return sorted;
   }, [filteredData, sortBy, sortDirection]);
+  */
 
+  /* Comment out unused pagination logic
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
@@ -933,6 +969,7 @@ export default function App() {
     }
     setCurrentPage(1);
   };
+  */
 
   const handleResetFilters = () => {
     setSelectedBranch('All');
@@ -1161,22 +1198,28 @@ export default function App() {
                   {/* Cột trái: presets */}
                   <div className="datepicker-sidebar">
                     <div className="sidebar-section-title">Đã dùng mới đây</div>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'today' ? 'active' : ''}`} onClick={() => applyPreset('today')}>Hôm nay</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'thisMonth' ? 'active' : ''}`} onClick={() => applyPreset('thisMonth')}>Tháng này</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'allTime' ? 'active' : ''}`} onClick={() => applyPreset('allTime')}>Tối đa</button>
-                    <div className="sidebar-divider" />
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'today' ? 'active' : ''}`} onClick={() => applyPreset('today')}>Hôm nay</button>
                     <button type="button" className={`preset-btn ${getActivePreset() === 'yesterday' ? 'active' : ''}`} onClick={() => applyPreset('yesterday')}>Hôm qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'todayAndYesterday' ? 'active' : ''}`} onClick={() => applyPreset('todayAndYesterday')}>Hôm nay và hôm qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'last7' ? 'active' : ''}`} onClick={() => applyPreset('last7')}>7 ngày qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'last14' ? 'active' : ''}`} onClick={() => applyPreset('last14')}>14 ngày qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'last28' ? 'active' : ''}`} onClick={() => applyPreset('last28')}>28 ngày qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'last30' ? 'active' : ''}`} onClick={() => applyPreset('last30')}>30 ngày qua</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'thisWeek' ? 'active' : ''}`} onClick={() => applyPreset('thisWeek')}>Tuần này</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'lastWeek' ? 'active' : ''}`} onClick={() => applyPreset('lastWeek')}>Tuần trước</button>
                     <button type="button" className={`preset-btn ${getActivePreset() === 'thisMonth' ? 'active' : ''}`} onClick={() => applyPreset('thisMonth')}>Tháng này</button>
-                    <button type="button" className={`preset-btn ${getActivePreset() === 'lastMonth' ? 'active' : ''}`} onClick={() => applyPreset('lastMonth')}>Tháng trước</button>
                     <button type="button" className={`preset-btn ${getActivePreset() === 'allTime' ? 'active' : ''}`} onClick={() => applyPreset('allTime')}>Tối đa</button>
+                    
+                    <div className="sidebar-divider" />
+                    <div className="sidebar-section-title">Chọn theo tháng</div>
+                    
+                    {availableMonths.map(m => {
+                      const parts = m.split('-'); // ["2026", "05"]
+                      const label = `Tháng ${parseInt(parts[1])} / ${parts[0]}`;
+                      const activeKey = `month:${m}`;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`preset-btn ${getActivePreset() === activeKey ? 'active' : ''}`}
+                          onClick={() => applyPreset(`month:${m}`)}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Cột phải: calendars */}
@@ -1390,14 +1433,21 @@ export default function App() {
               <div className="chart-body" style={{ minHeight: 'auto', overflowY: 'auto' }}>
                 <div className="ranking-list">
                   {branchRanking.map((item, i) => (
-                    <div key={item.name} className="ranking-item">
+                    <div 
+                      key={item.name} 
+                      className={`ranking-item clickable-branch-row ${selectedDetailBranch === item.name ? 'active-branch' : ''}`}
+                      onClick={() => setSelectedDetailBranch(selectedDetailBranch === item.name ? null : item.name)}
+                      style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+                    >
                       <div className={`rank-num ${i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other'}`}>
                         {i + 1}
                       </div>
-                      <div className="rank-bar-wrap">
-                        <div className="rank-label">
-                          <span className="rank-name">{item.name}</span>
-                          <span className="rank-value" style={{ color: '#34d399' }}>{formatCurrency(item.revenue)}</span>
+                      <div className="rank-bar-wrap" style={{ width: '100%' }}>
+                        <div className="rank-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span className="rank-name" style={{ fontWeight: 600 }}>
+                            {item.name} <span className="view-detail-tag" style={{ fontSize: 9, opacity: 0.6, marginLeft: 6 }}>chi tiết →</span>
+                          </span>
+                          <span className="rank-value" style={{ color: '#34d399', fontWeight: 700 }}>{formatCurrency(item.revenue)}</span>
                         </div>
                         <div className="rank-bar-bg">
                           <div className="rank-bar-fill" style={{ width: `${(item.revenue / maxBranchRevenue) * 100}%`, background: i === 0 ? 'var(--amber)' : i === 1 ? 'var(--blue)' : 'var(--violet)' }} />
@@ -1489,96 +1539,7 @@ export default function App() {
         </>
       )}
 
-      {/* ══════════════════════════════════════════
-           CEO VIEW — DATA TABLE (Detail Log)
-      ══════════════════════════════════════════ */}
-      <p className="section-title">Nhật Ký Chi Tiết</p>
-      <section className="table-card">
-        <div className="table-header">
-          <div>
-            <h2 className="table-title">Chi Tiết Chiến Dịch Quảng Cáo</h2>
-            <p className="table-subtitle">{sortedData.length} bản ghi · Nhấn tiêu đề cột để sắp xếp</p>
-          </div>
-          <div className="page-size-selector">
-            <label htmlFor="page-size-select">Dòng/trang:</label>
-            <select id="page-size-select" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="table-responsive">
-          <table className="custom-table" id="data-log-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('date')} className="sortable">Ngày <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('branch')} className="sortable">Chi Nhánh <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('team')} className="sortable">Team <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('operator')} className="sortable">Operator <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('service')} className="sortable">Dịch Vụ <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('ads_spend')} className="sortable text-right">Chi Ads <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('leads')} className="sortable text-right">Leads <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('cost_per_lead')} className="sortable text-right">Cost/Lead <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('showups')} className="sortable text-right">Showup <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('revenue')} className="sortable text-right">Doanh Số <ArrowUpDown size={11} /></th>
-                <th onClick={() => handleSort('ads_ratio')} className="sortable text-right">%Ads <ArrowUpDown size={11} /></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.length > 0 ? paginatedData.map((row, idx) => {
-                const rowRoas = row.ads_spend > 0 ? row.revenue / row.ads_spend : 0;
-                return (
-                  <tr key={idx}>
-                    <td><span className="date-badge">{row.date}</span></td>
-                    <td><span className="branch-badge">{row.branch}</span></td>
-                    <td>{row.team}</td>
-                    <td><span className="operator-badge">{row.operator}</span></td>
-                    <td><span className="service-badge">{row.service}</span></td>
-                    <td className="text-right font-mono">{formatCurrency(row.ads_spend)}</td>
-                    <td className="text-right font-semibold">{row.leads}</td>
-                    <td className="text-right font-mono">{formatCurrency(row.cost_per_lead)}</td>
-                    <td className="text-right">{row.showups}</td>
-                    <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(row.revenue)}</td>
-                    <td className={`text-right font-semibold ${rowRoas >= 2 ? 'roas-good' : rowRoas >= 1 ? 'roas-warn' : 'roas-bad'}`}>
-                      {(row.ads_ratio * 100).toFixed(1)}%
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr><td colSpan={11} className="table-empty">Không tìm thấy bản ghi nào.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="table-pagination">
-          <div className="pagination-info">
-            Trang <strong>{currentPage}</strong>/{totalPages} &nbsp;·&nbsp;
-            {Math.min(sortedData.length, (currentPage-1)*pageSize+1)}–{Math.min(sortedData.length, currentPage*pageSize)} / {sortedData.length} dòng
-          </div>
-          <div className="pagination-controls">
-            <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage===1} aria-label="Trang trước">
-              <ChevronLeft size={15} />
-            </button>
-            <span className="pagination-pages">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let p = i + 1;
-                if (currentPage > 3 && totalPages > 5) {
-                  p = currentPage - 3 + i;
-                  if (p + (4-i) > totalPages) p = totalPages - 4 + i;
-                }
-                return <button key={p} type="button" className={`page-num-btn ${currentPage===p?'active':''}`} onClick={() => setCurrentPage(p)}>{p}</button>;
-              })}
-            </span>
-            <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={currentPage===totalPages} aria-label="Trang sau">
-              <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* Bảng Nhật Ký Chi Tiết đã được ẩn theo yêu cầu */}
       </>)}
 
       {/* ══════════════════════════════════════════
@@ -1708,81 +1669,188 @@ export default function App() {
           </div>
         </div>
 
-        <p className="section-title">Nhật Ký Chi Tiết — Góc Nhìn Team</p>
-        <section className="table-card">
-          <div className="table-header">
-            <div>
-              <h2 className="table-title">Chi Tiết Theo Operator & BM</h2>
-              <p className="table-subtitle">{sortedData.length} bản ghi · Focus: Leads, Cost, Show-up</p>
-            </div>
-            <div className="page-size-selector">
-              <label htmlFor="page-size-select-team">Dòng/trang:</label>
-              <select id="page-size-select-team" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-          </div>
-          <div className="table-responsive">
-            <table className="custom-table" id="team-data-table">
-              <thead>
-                <tr>
-                  <th onClick={() => handleSort('date')} className="sortable">Ngày <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('operator')} className="sortable">Operator <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('branch')} className="sortable">Chi Nhánh <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('bm')} className="sortable">BM Account <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('service')} className="sortable">Dịch Vụ <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('ads_spend')} className="sortable text-right">Chi Ads <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('contacts')} className="sortable text-right">Liên Hệ <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('leads')} className="sortable text-right">Leads <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('cost_per_lead')} className="sortable text-right">Cost/Lead <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('showups')} className="sortable text-right">Show-up <ArrowUpDown size={11}/></th>
-                  <th onClick={() => handleSort('cost_per_showup')} className="sortable text-right">Cost/Show <ArrowUpDown size={11}/></th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.length > 0 ? paginatedData.map((row, idx) => {
-                  const cpl = row.cost_per_lead;
-                  return (
-                    <tr key={idx}>
-                      <td><span className="date-badge">{row.date}</span></td>
-                      <td><span className="operator-badge">{row.operator}</span></td>
-                      <td><span className="branch-badge">{row.branch}</span></td>
-                      <td style={{fontSize:12,color:'var(--text-2)'}}>{row.bm || '—'}</td>
-                      <td><span className="service-badge">{row.service}</span></td>
-                      <td className="text-right font-mono">{formatCurrency(row.ads_spend)}</td>
-                      <td className="text-right">{row.contacts}</td>
-                      <td className="text-right font-semibold" style={{color:'var(--blue)'}}>{row.leads}</td>
-                      <td className={`text-right font-mono ${cpl>0&&cpl<100000?'roas-good':cpl<300000?'roas-warn':'roas-bad'}`}>{formatCurrency(cpl)}</td>
-                      <td className="text-right font-semibold" style={{color:'var(--violet)'}}>{row.showups}</td>
-                      <td className="text-right font-mono">{formatCurrency(row.cost_per_showup)}</td>
-                    </tr>
-                  );
-                }) : (
-                  <tr><td colSpan={11} className="table-empty">Không có dữ liệu.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="table-pagination">
-            <div className="pagination-info">
-              Trang <strong>{currentPage}</strong>/{totalPages} &nbsp;·&nbsp; {Math.min(sortedData.length,(currentPage-1)*pageSize+1)}–{Math.min(sortedData.length,currentPage*pageSize)} / {sortedData.length} dòng
-            </div>
-            <div className="pagination-controls">
-              <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1}><ChevronLeft size={15}/></button>
-              <span className="pagination-pages">
-                {Array.from({length:Math.min(5,totalPages)},(_,i)=>{
-                  let p=i+1;
-                  if(currentPage>3&&totalPages>5){p=currentPage-3+i;if(p+(4-i)>totalPages)p=totalPages-4+i;}
-                  return <button key={p} type="button" className={`page-num-btn ${currentPage===p?'active':''}`} onClick={()=>setCurrentPage(p)}>{p}</button>;
-                })}
-              </span>
-              <button type="button" className="btn btn-icon" onClick={() => setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages}><ChevronRight size={15}/></button>
-            </div>
-          </div>
-        </section>
+        {/* Bảng Nhật Ký Chi Tiết Team đã được ẩn theo yêu cầu */}
       </>)}
+
+      {/* ══════════════════════════════════════════
+           ACCORDION DRAWER FOR BRANCH DETAILS (Layer 2 & Layer 3)
+      ══════════════════════════════════════════ */}
+      {selectedDetailBranch && (() => {
+        const real = (() => {
+          const branchRecords = records.filter(r => {
+            if (r.branch !== selectedDetailBranch) return false;
+            if (startDate && r.date < startDate) return false;
+            if (endDate && r.date > endDate) return false;
+            return true;
+          });
+
+          let adsSpend = 0, leads = 0, showups = 0, revenue = 0;
+          branchRecords.forEach(r => {
+            adsSpend += r.ads_spend;
+            leads += r.leads;
+            showups += r.showups;
+            revenue += r.revenue;
+          });
+
+          return { adsSpend, leads, showups, revenue, records: branchRecords };
+        })();
+
+        const targetMonthStr = startDate ? startDate.substring(0, 7) : '2026-05';
+        const target = getBranchTarget(selectedDetailBranch, targetMonthStr);
+
+        const formatPercent = (val: number, base: number) => {
+          if (!base) return '0.0%';
+          return `${((val / base) * 100).toFixed(1)}%`;
+        };
+
+        const getProgressWidth = (val: number, base: number) => {
+          if (!base) return '0%';
+          return `${Math.min(100, (val / base) * 100)}%`;
+        };
+
+        const staffData = (() => {
+          const operatorMap: Record<string, { name: string, team: string, service: string, adsSpend: number, leads: number, showups: number, revenue: number }> = {};
+          
+          real.records.forEach(r => {
+            const op = r.operator || 'Chưa rõ';
+            if (!operatorMap[op]) {
+              operatorMap[op] = {
+                name: op,
+                team: r.team || 'Chưa rõ',
+                service: r.service || 'Chưa rõ',
+                adsSpend: 0,
+                leads: 0,
+                showups: 0,
+                revenue: 0
+              };
+            }
+            operatorMap[op].adsSpend += r.ads_spend;
+            operatorMap[op].leads += r.leads;
+            operatorMap[op].showups += r.showups;
+            operatorMap[op].revenue += r.revenue;
+          });
+
+          return Object.values(operatorMap).sort((a, b) => b.revenue - a.revenue);
+        })();
+
+        return (
+          <div className="branch-drawer-overlay" onClick={() => setSelectedDetailBranch(null)}>
+            <div className="branch-drawer" onClick={e => e.stopPropagation()}>
+              <div className="drawer-header">
+                <div>
+                  <h2 className="drawer-title">Chi Tiết Chi Nhánh: {selectedDetailBranch}</h2>
+                  <p className="drawer-subtitle">
+                    Tháng mục tiêu: {targetMonthStr.split('-').reverse().join('/')} &nbsp;·&nbsp;&nbsp;
+                    {startDate ? startDate.split('-').reverse().join('/') : ''} - {endDate ? endDate.split('-').reverse().join('/') : ''}
+                  </p>
+                </div>
+                <button type="button" className="btn-close-drawer" onClick={() => setSelectedDetailBranch(null)}>×</button>
+              </div>
+
+              <div className="drawer-body">
+                {/* Layer 2: Targets & Progress */}
+                <div className="drawer-section">
+                  <h3 className="section-subtitle">Lớp 2: Tiến Độ Mục Tiêu Chi Nhánh</h3>
+                  <div className="progress-grid">
+                    {/* Doanh số */}
+                    <div className="progress-card">
+                      <div className="progress-card-header">
+                        <span className="card-lbl">Doanh Số</span>
+                        <span className="card-pct c-emerald">{formatPercent(real.revenue, target.revenue)}</span>
+                      </div>
+                      <div className="progress-card-bar">
+                        <div className="progress-bar-fill fill-emerald" style={{ width: getProgressWidth(real.revenue, target.revenue) }} />
+                      </div>
+                      <div className="progress-card-info">
+                        <span>Thực tế: <strong>{formatCurrency(real.revenue)}</strong></span>
+                        <span>Mục tiêu: {formatCurrency(target.revenue)}</span>
+                      </div>
+                    </div>
+
+                    {/* Ngân sách ads */}
+                    <div className="progress-card">
+                      <div className="progress-card-header">
+                        <span className="card-lbl">Chi Ads / Ngân Sách</span>
+                        <span className="card-pct c-blue">{formatPercent(real.adsSpend, target.adsSpend)}</span>
+                      </div>
+                      <div className="progress-card-bar">
+                        <div className="progress-bar-fill fill-blue" style={{ width: getProgressWidth(real.adsSpend, target.adsSpend) }} />
+                      </div>
+                      <div className="progress-card-info">
+                        <span>Thực tế: <strong>{formatCurrency(real.adsSpend)}</strong></span>
+                        <span>Mục tiêu: {formatCurrency(target.adsSpend)}</span>
+                      </div>
+                    </div>
+
+                    {/* Leads */}
+                    <div className="progress-card">
+                      <div className="progress-card-header">
+                        <span className="card-lbl">SĐT (Leads)</span>
+                        <span className="card-pct c-amber">{formatPercent(real.leads, target.leads)}</span>
+                      </div>
+                      <div className="progress-card-bar">
+                        <div className="progress-bar-fill fill-amber" style={{ width: getProgressWidth(real.leads, target.leads) }} />
+                      </div>
+                      <div className="progress-card-info">
+                        <span>Thực tế: <strong>{real.leads}</strong></span>
+                        <span>Mục tiêu: {target.leads}</span>
+                      </div>
+                    </div>
+
+                    {/* Show-up */}
+                    <div className="progress-card">
+                      <div className="progress-card-header">
+                        <span className="card-lbl">Khách Đến (Showup)</span>
+                        <span className="card-pct c-violet">{formatPercent(real.showups, target.showups)}</span>
+                      </div>
+                      <div className="progress-card-bar">
+                        <div className="progress-bar-fill fill-violet" style={{ width: getProgressWidth(real.showups, target.showups) }} />
+                      </div>
+                      <div className="progress-card-info">
+                        <span>Thực tế: <strong>{real.showups}</strong></span>
+                        <span>Mục tiêu: {target.showups}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Layer 3: Staff details */}
+                <div className="drawer-section staff-section">
+                  <h3 className="section-subtitle">Lớp 3: Hiệu Suất Từng Nhân Sự</h3>
+                  <div className="table-responsive">
+                    <table className="custom-table staff-table">
+                      <thead>
+                        <tr>
+                          <th>Nhân sự</th>
+                          <th>Team</th>
+                          <th>Dịch vụ</th>
+                          <th className="text-right">Chi Ads</th>
+                          <th className="text-right">Leads</th>
+                          <th className="text-right">Doanh số</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {staffData.length > 0 ? staffData.map((staff, idx) => (
+                          <tr key={idx}>
+                            <td><span className="operator-badge">{staff.name}</span></td>
+                            <td>{staff.team}</td>
+                            <td><span className="service-badge">{staff.service}</span></td>
+                            <td className="text-right font-mono">{formatCurrency(staff.adsSpend)}</td>
+                            <td className="text-right font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</td>
+                            <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={6} className="table-empty">Không có nhân sự nào.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <footer className="dashboard-footer-bar">
         <p>© 2026 Dohyun Group · Hệ thống phân tích nội bộ</p>
