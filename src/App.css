@@ -382,6 +382,64 @@ option { background: #0d1428; }
 .results-count strong { color: var(--text-1); }
 .action-buttons-group { display: flex; gap: 8px; }
 
+/* Filter Chips styles */
+.filter-chips-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chips-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 105px;
+}
+
+.chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-1);
+}
+
+.filter-chip.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.35) 100%);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+}
+
+.filter-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 14px 0;
+}
+
+
 
 /* ══════════════════════════════════════════════════════════
    CEO KPI OVERVIEW — ROW 1: Big 4 KPIs
@@ -1309,6 +1367,14 @@ option { background: #0d1428; }
 .staff-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
 }
+
+.table-sub-info {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 3px;
+  font-weight: normal;
+}
+
 
 /* Clickable Branch style */
 .clickable-branch-row {

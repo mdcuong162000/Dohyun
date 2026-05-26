@@ -90,10 +90,55 @@ const getBranchTarget = (branchName: string, dateStr: string) => {
     'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
     'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
     'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
-    'Long Xuyên': { revenue: 250000000, adsSpend: 80000000, leads: 130, showups: 35 }
   };
   return defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
 };
+
+const OPERATOR_TARGETS: Record<string, Record<string, Record<string, { adsSpend: number, leads: number, revenue: number }>>> = {
+  '2026-05': {
+    'Đà Nẵng': {
+      'HUẾ': { adsSpend: 343000000, leads: 708, revenue: 1295727497 },
+      'BIN': { adsSpend: 231000000, leads: 517, revenue: 947313231 },
+      'NHI': { adsSpend: 126000000, leads: 219, revenue: 400406965 },
+      'THẮNG': { adsSpend: 90322580, leads: 150, revenue: 300000000 },
+      'HỒNG': { adsSpend: 10000000, leads: 20, revenue: 40000000 },
+      'TÀI': { adsSpend: 10000000, leads: 20, revenue: 40000000 }
+    },
+    'Nha Trang': {
+      'HỒNG': { adsSpend: 168000000, leads: 279, revenue: 510510000 },
+      'BIN': { adsSpend: 70000000, leads: 109, revenue: 200000000 },
+      'HUẾ': { adsSpend: 94500000, leads: 277, revenue: 507000000 },
+      'ĐỨC': { adsSpend: 20000000, leads: 50, revenue: 100000000 }
+    }
+  },
+  '2026-04': {
+    'Đà Nẵng': {
+      'HUẾ': { adsSpend: 382500000, leads: 700, revenue: 1200000000 },
+      'BIN': { adsSpend: 240000000, leads: 500, revenue: 900000000 },
+      'NHI': { adsSpend: 127500000, leads: 200, revenue: 380000000 }
+    },
+    'Nha Trang': {
+      'BIN': { adsSpend: 140000000, leads: 250, revenue: 500000000 },
+      'HUẾ': { adsSpend: 240000000, leads: 450, revenue: 900000000 },
+      'ĐỨC': { adsSpend: 20000000, leads: 40, revenue: 80000000 },
+      'HỒNG': { adsSpend: 50000000, leads: 80, revenue: 150000000 }
+    }
+  }
+};
+
+const getOperatorTarget = (opName: string, branchName: string, dateStr: string) => {
+  const monthKey = dateStr || '2026-05';
+  const monthMap = OPERATOR_TARGETS[monthKey] || OPERATOR_TARGETS['2026-05'];
+  const branchMap = monthMap[branchName] || {};
+  const opTarget = branchMap[opName.trim().toUpperCase()];
+  
+  if (opTarget) {
+    return opTarget;
+  }
+  
+  return { adsSpend: 0, leads: 0, revenue: 0 };
+};
+
 
 
 let tokenClient: any = null;
@@ -1137,25 +1182,43 @@ export default function App() {
 
 
       <section className="filter-panel" id="filters">
-        <div className="filter-grid">
-          <div className="filter-group">
-            <label htmlFor="branch-select">Chi Nhánh</label>
-            <div className="select-wrapper">
-              <Building2 size={15} className="select-icon" />
-              <select id="branch-select" value={selectedBranch} onChange={e => { setSelectedBranch(e.target.value); setCurrentPage(1); }}>
-                {uniqueBranches.map(b => <option key={b} value={b}>{b === 'All' ? 'Tất cả Chi Nhánh' : b}</option>)}
-              </select>
-            </div>
+        {/* Row 1: Chi Nhánh Chips */}
+        <div className="filter-chips-group">
+          <span className="chips-label"><Building2 size={14} /> Chi Nhánh:</span>
+          <div className="chips-container">
+            {uniqueBranches.map(b => (
+              <button
+                key={b}
+                type="button"
+                className={`filter-chip ${selectedBranch === b ? 'active' : ''}`}
+                onClick={() => { setSelectedBranch(b); setCurrentPage(1); }}
+              >
+                {b === 'All' ? 'Tất cả Chi Nhánh' : b}
+              </button>
+            ))}
           </div>
-          <div className="filter-group">
-            <label htmlFor="team-select">Team</label>
-            <div className="select-wrapper">
-              <User size={15} className="select-icon" />
-              <select id="team-select" value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); setCurrentPage(1); }}>
-                {uniqueTeams.map(t => <option key={t} value={t}>{t === 'All' ? 'Tất cả Team' : t}</option>)}
-              </select>
-            </div>
+        </div>
+
+        {/* Row 2: Team Chips */}
+        <div className="filter-chips-group" style={{ marginTop: '12px' }}>
+          <span className="chips-label"><User size={14} /> Team:</span>
+          <div className="chips-container">
+            {uniqueTeams.map(t => (
+              <button
+                key={t}
+                type="button"
+                className={`filter-chip ${selectedTeam === t ? 'active' : ''}`}
+                onClick={() => { setSelectedTeam(t); setCurrentPage(1); }}
+              >
+                {t === 'All' ? 'Tất cả Team' : t}
+              </button>
+            ))}
           </div>
+        </div>
+
+        <div className="filter-divider" />
+
+        <div className="filter-grid" style={{ marginTop: '12px' }}>
           <div className="filter-group">
             <label htmlFor="service-select">Dịch Vụ</label>
             <div className="select-wrapper">
@@ -1681,16 +1744,53 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {staffData.length > 0 ? staffData.map((staff, idx) => (
-                          <tr key={idx}>
-                            <td><span className="operator-badge">{staff.name}</span></td>
-                            <td>{staff.team}</td>
-                            <td><span className="service-badge">{staff.service}</span></td>
-                            <td className="text-right font-mono">{formatCurrency(staff.adsSpend)}</td>
-                            <td className="text-right font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</td>
-                            <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</td>
-                          </tr>
-                        )) : (
+                        {staffData.length > 0 ? staffData.map((staff, idx) => {
+                          const target = getOperatorTarget(staff.name, selectedDetailBranch || '', targetMonthStr);
+                          const formatProgress = (val: number, tgt: number) => {
+                            if (!tgt) return '';
+                            return ` (${((val / tgt) * 100).toFixed(0)}%)`;
+                          };
+                          return (
+                            <tr key={idx}>
+                              <td><span className="operator-badge">{staff.name}</span></td>
+                              <td>{staff.team}</td>
+                              <td><span className="service-badge">{staff.service}</span></td>
+                              <td className="text-right">
+                                <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
+                                {target.adsSpend > 0 ? (
+                                  <div className="table-sub-info">
+                                    Mục tiêu: {formatCurrency(target.adsSpend)}
+                                    <span className="c-blue font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.adsSpend, target.adsSpend)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
+                                )}
+                              </td>
+                              <td className="text-right">
+                                <div className="font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</div>
+                                {target.leads > 0 ? (
+                                  <div className="table-sub-info">
+                                    Mục tiêu: {target.leads}
+                                    <span className="c-amber font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.leads, target.leads)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
+                                )}
+                              </td>
+                              <td className="text-right">
+                                <div className="font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</div>
+                                {target.revenue > 0 ? (
+                                  <div className="table-sub-info">
+                                    Mục tiêu: {formatCurrency(target.revenue)}
+                                    <span className="c-emerald font-semibold" style={{ marginLeft: 4 }}>{formatProgress(staff.revenue, target.revenue)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        }) : (
                           <tr><td colSpan={6} className="table-empty">Không có nhân sự nào.</td></tr>
                         )}
                       </tbody>
