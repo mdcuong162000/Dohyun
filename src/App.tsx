@@ -245,24 +245,64 @@ export default function App() {
       // Try Google Sheets API OAuth fetch if we have an active access token
       if (accessToken) {
         try {
-          const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Daily`;
+          // Step 1: Get spreadsheet metadata to find available sheet names
+          const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+          const metadataRes = await fetch(metadataUrl, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`
+            }
+          });
+
+          if (metadataRes.status === 401) {
+            handleLogout();
+            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          }
+
+          if (metadataRes.status === 403) {
+            throw new Error('Bạn không có quyền truy cập vào Google Sheet này. Hãy chắc chắn tài khoản Gmail này đã được phân quyền xem trên Google Drive.');
+          }
+
+          if (!metadataRes.ok) {
+            throw new Error(`Không thể đọc thông tin cấu trúc Google Sheet. Mã lỗi: ${metadataRes.status}`);
+          }
+
+          const metadata = await metadataRes.json();
+          const sheets = metadata.sheets || [];
+          if (sheets.length === 0) {
+            throw new Error('Tệp Google Sheet này không chứa trang tính (tab) nào.');
+          }
+
+          // Step 2: Determine target sheet name (prefer 'Daily', then 'Dataimp', then any containing 'daily'/'data', fallback to first sheet)
+          let targetSheetName = '';
+          const sheetTitles = sheets.map((s: any) => s.properties?.title || '');
+          
+          const exactDaily = sheetTitles.find((t: string) => t === 'Daily');
+          const exactDataimp = sheetTitles.find((t: string) => t === 'Dataimp');
+          const containsDaily = sheetTitles.find((t: string) => t.toLowerCase().includes('daily'));
+          const containsData = sheetTitles.find((t: string) => t.toLowerCase().includes('data'));
+          
+          if (exactDaily) {
+            targetSheetName = exactDaily;
+          } else if (exactDataimp) {
+            targetSheetName = exactDataimp;
+          } else if (containsDaily) {
+            targetSheetName = containsDaily;
+          } else if (containsData) {
+            targetSheetName = containsData;
+          } else {
+            targetSheetName = sheetTitles[0]; // fallback to first sheet
+          }
+
+          // Step 3: Fetch values from the chosen sheet
+          const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}`;
           const apiRes = await fetch(apiUrl, {
             headers: {
               Authorization: `Bearer ${accessToken}`
             }
           });
-          
-          if (apiRes.status === 401) {
-            handleLogout();
-            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-          }
-
-          if (apiRes.status === 403) {
-            throw new Error('Bạn không có quyền truy cập vào Google Sheet này. Hãy chắc chắn tài khoản Gmail này đã được phân quyền xem trên Google Drive.');
-          }
 
           if (!apiRes.ok) {
-            throw new Error(`Google API trả về mã lỗi: ${apiRes.status} (${apiRes.statusText})`);
+            throw new Error(`Không thể lấy dữ liệu từ tab '${targetSheetName}'. Mã lỗi: ${apiRes.status}`);
           }
 
           const data = await apiRes.json();
