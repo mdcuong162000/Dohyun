@@ -109,13 +109,22 @@ export default function App() {
   const [authError, setAuthError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-  const [isLiveActive, setIsLiveActive] = useState<boolean>(false);
   const [records, setRecords] = useState<DailyRecord[]>([]);
 
   // Env variables
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-  const spreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
+  const defaultSpreadsheetId = import.meta.env.VITE_SPREADSHEET_ID;
   const isClientIdPlaceholder = !clientId || clientId.includes('PLACEHOLDER');
+
+  // --- DYNAMIC SPREADSHEET ID FROM URL QUERY PARAM (?sheetId=...) ---
+  const spreadsheetId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlSheetId = params.get('sheetId');
+    if (urlSheetId && urlSheetId.trim().length > 10) {
+      return urlSheetId.trim();
+    }
+    return defaultSpreadsheetId;
+  }, [defaultSpreadsheetId]);
 
   // --- PARSE GOOGLE SHEETS ROWS ---
   const parseSheetsData = (rows: any[][]): DailyRecord[] => {
@@ -216,7 +225,6 @@ export default function App() {
         }
 
         const csvText = await res.text();
-        // If Google Sheet is private, it returns Google Login HTML page instead of CSV
         if (csvText.includes('google-site-verification') || csvText.includes('<!DOCTYPE html>') || csvText.includes('login')) {
           throw new Error('Tệp đang ở chế độ Riêng tư (Private). Yêu cầu đăng nhập Google.');
         }
@@ -225,13 +233,12 @@ export default function App() {
         const parsed = parseSheetsData(rows);
         if (parsed.length > 0) {
           setRecords(parsed);
-          setIsLiveActive(true);
           setIsDemoMode(false);
           setIsLoading(false);
           return; // Success! Skip auth flow entirely.
         }
       } catch (err) {
-        console.log('[Sync] Không thể đồng bộ trực tiếp (Sheet ở chế độ riêng tư). Chuyển sang chế độ xác thực/demo.');
+        console.log('[Sync] Bảng tính Google Sheet ở chế độ riêng tư hoặc link lỗi. Chuyển sang xác thực Google.');
       }
 
       // If direct CSV fetch failed:
@@ -250,32 +257,32 @@ export default function App() {
             throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
           }
 
+          if (apiRes.status === 403) {
+            throw new Error('Bạn không có quyền truy cập vào Google Sheet này. Hãy chắc chắn tài khoản Gmail này đã được phân quyền xem trên Google Drive.');
+          }
+
           if (!apiRes.ok) {
-            throw new Error(`Google API error: ${apiRes.status}`);
+            throw new Error(`Google API trả về mã lỗi: ${apiRes.status} (${apiRes.statusText})`);
           }
 
           const data = await apiRes.json();
           const parsed = parseSheetsData(data.values);
           setRecords(parsed);
-          setIsLiveActive(true);
           setIsDemoMode(false);
         } catch (err: any) {
           console.error('[Sync] Lỗi OAuth fetch:', err);
-          setAuthError(err.message || 'Lỗi khi đồng bộ qua tài khoản Google.');
-          // Default to local mock data
-          setRecords(localMockData as DailyRecord[]);
-          setIsDemoMode(true);
+          setAuthError(err.message || 'Lỗi khi đồng bộ dữ liệu qua tài khoản Google.');
+          setRecords([]);
         }
       } else {
         // No token, no public access -> default to demo mode or prompt login screen
-        // Let's set loading to false so the Login/Demo screen is shown
         setRecords([]);
       }
       setIsLoading(false);
     };
 
     tryPublicSync();
-  }, [accessToken]);
+  }, [accessToken, spreadsheetId]);
 
   // --- INITIALIZE GOOGLE OAUTH CLIENT SDK ---
   useEffect(() => {
@@ -324,13 +331,11 @@ export default function App() {
     localStorage.removeItem('dohyun_access_token');
     setAccessToken(null);
     setIsDemoMode(false);
-    setIsLiveActive(false);
   };
 
   const handleEnterDemo = () => {
     setRecords(localMockData as DailyRecord[]);
     setIsDemoMode(true);
-    setIsLiveActive(false);
   };
 
   // --- FILTER STATE ---
@@ -538,7 +543,7 @@ export default function App() {
     return (
       <div className="loading-screen">
         <div className="spinner"></div>
-        <p>Đang kiểm tra kết nối Google Sheets...</p>
+        <p>Đang tải dữ liệu từ Google Sheets...</p>
       </div>
     );
   }
@@ -556,19 +561,22 @@ export default function App() {
 
           <div className="login-card-body">
             {authError && (
-              <div className="alert alert-danger">
-                <AlertCircle size={16} />
-                <span>{authError}</span>
+              <div className="alert alert-danger" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
+                  <AlertCircle size={16} />
+                  <span>Không thể tải dữ liệu</span>
+                </div>
+                <p style={{ fontSize: '12px', marginTop: '6px', lineHeight: 1.4 }}>{authError}</p>
               </div>
             )}
 
             <div className="alert alert-warning" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}>
                 <AlertCircle size={16} />
-                <span>Google Sheet đang khóa riêng tư (Private)</span>
+                <span>Báo cáo Google Sheet bảo mật (Locked)</span>
               </div>
               <p style={{ fontSize: '11px', marginTop: '6px', opacity: 0.8, lineHeight: 1.4 }}>
-                Để tự động hóa hoàn toàn và **bỏ qua bước đăng nhập**, sếp chỉ cần bật chia sẻ Google Sheet ở quyền: **"Bất kỳ ai có đường liên kết đều có thể xem"** (Anyone with the link can view). Trang web sẽ tự động nhận diện và cập nhật live!
+                Sếp và nhân viên cần **Đăng nhập bằng tài khoản Google (Gmail)** đã được phân quyền xem trên tệp Google Sheet để xem báo cáo này.
               </p>
             </div>
 
@@ -576,10 +584,10 @@ export default function App() {
               <div className="config-warning-box">
                 <div className="warning-header">
                   <AlertCircle size={18} className="text-amber" />
-                  <h3>Chưa thiết lập Google OAuth Client ID</h3>
+                  <h3>Chưa cấu hình Google Client ID</h3>
                 </div>
                 <p className="warning-desc">
-                  Để xem dữ liệu thời gian thực từ Google Sheets qua tài khoản Google cá nhân bảo mật, sếp cần đăng ký OAuth Client ID trên Google Cloud Console và dán vào tệp <code>.env.local</code>.
+                  Vui lòng thêm mã <code>VITE_GOOGLE_CLIENT_ID</code> vào Settings Secrets trên GitHub để kích hoạt đăng nhập Google.
                 </p>
               </div>
             ) : null}
@@ -622,7 +630,7 @@ export default function App() {
             <p className="header-subtitle">
               {isDemoMode 
                 ? 'Chế độ: Dữ liệu mẫu (Offline Demo)' 
-                : (isLiveActive ? 'Đồng bộ tự động: Google Sheet Live Link 🟢' : 'Kết nối tài khoản Google')}
+                : `Đồng bộ Google Sheet Live Sync (Gmail truy cập: OK) 🟢`}
             </p>
           </div>
         </div>
@@ -635,9 +643,9 @@ export default function App() {
             </span>
           )}
           
-          {isLiveActive && (
+          {!isDemoMode && (
             <span className="meta-badge pulse-badge">
-              Live Auto Sync
+              Live Secured
             </span>
           )}
 
