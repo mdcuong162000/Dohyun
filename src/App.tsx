@@ -1602,9 +1602,18 @@ export default function App() {
               <tr>
                 <th>Nhân Viên</th>
                 <th>Team</th>
-                <th className="text-right">Chi Ads</th>
-                <th className="text-right">Leads</th>
-                <th className="text-right">Doanh Số</th>
+                <th className="text-right">
+                  <div>Chi Ads</div>
+                  <div className="header-sub-info">Thực / Mục tiêu</div>
+                </th>
+                <th className="text-right">
+                  <div>Leads</div>
+                  <div className="header-sub-info">Thực / Mục tiêu</div>
+                </th>
+                <th className="text-right">
+                  <div>Doanh Số</div>
+                  <div className="header-sub-info">Thực / Mục tiêu</div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1629,39 +1638,39 @@ export default function App() {
                       <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
                       {opTarget.adsSpend > 0 ? (
                         <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
-                          Mục tiêu: {formatCurrency(opTarget.adsSpend)}
+                          {formatCurrency(opTarget.adsSpend)}
                           <span className={staff.adsSpend > opTarget.adsSpend ? 'c-rose' : 'c-emerald'} style={{ marginLeft: 4, fontWeight: 700 }}>
                             {formatProgress(staff.adsSpend, opTarget.adsSpend)}
                           </span>
                         </div>
                       ) : (
-                        <div className="table-sub-info" style={{ opacity: 0.4 }}>Không mục tiêu</div>
+                        <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
                       )}
                     </td>
                     <td className="text-right">
                       <div className="font-semibold c-blue">{formatNumber(staff.leads)}</div>
                       {opTarget.leads > 0 ? (
                         <div className="table-sub-info" style={{ opacity: 0.75 }}>
-                          Mục tiêu: {opTarget.leads}
+                          {formatNumber(opTarget.leads)}
                           <span className={staff.leads >= opTarget.leads ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
                             {formatProgress(staff.leads, opTarget.leads)}
                           </span>
                         </div>
                       ) : (
-                        <div className="table-sub-info" style={{ opacity: 0.4 }}>Không mục tiêu</div>
+                        <div className="table-sub-info" style={{ opacity: 0.4 }}>—</div>
                       )}
                     </td>
                     <td className="text-right">
                       <div className="font-mono font-semibold c-emerald">{formatCurrency(staff.revenue)}</div>
                       {opTarget.revenue > 0 ? (
                         <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
-                          Mục tiêu: {formatCurrency(opTarget.revenue)}
+                          {formatCurrency(opTarget.revenue)}
                           <span className={staff.revenue >= opTarget.revenue ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
                             {formatProgress(staff.revenue, opTarget.revenue)}
                           </span>
                         </div>
                       ) : (
-                        <div className="table-sub-info" style={{ opacity: 0.4 }}>Không mục tiêu</div>
+                        <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
                       )}
                     </td>
                   </tr>

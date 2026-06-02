@@ -1890,6 +1890,15 @@ option { background: #0d1428; }
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.header-sub-info {
+  font-size: 9px;
+  color: var(--text-2);
+  opacity: 0.6;
+  text-transform: none;
+  font-weight: normal;
+  margin-top: 2px;
+}
+
 .staff-table th:first-child {
   text-align: left;
 }
