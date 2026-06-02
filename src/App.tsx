@@ -322,6 +322,34 @@ export default function App() {
     return ['All', ...Array.from(branches)];
   }, [records]);
 
+  const activeBranches = useMemo(() => {
+    const activeSet = new Set<string>();
+    records.forEach(r => {
+      if (startDate && r.date < startDate) return;
+      if (endDate && r.date > endDate) return;
+      if (r.ads_spend > 0 && r.branch) {
+        activeSet.add(r.branch);
+      }
+    });
+    if (activeSet.size === 0) {
+      records.forEach(r => {
+        if (startDate && r.date < startDate) return;
+        if (endDate && r.date > endDate) return;
+        if (r.branch) {
+          activeSet.add(r.branch);
+        }
+      });
+    }
+    if (activeSet.size === 0) {
+      return uniqueBranches.filter(b => b !== 'All');
+    }
+    return Array.from(activeSet);
+  }, [records, startDate, endDate, uniqueBranches]);
+
+  const visibleBranches = useMemo(() => {
+    return ['All', ...activeBranches];
+  }, [activeBranches]);
+
   const uniqueTeams = useMemo(() => {
     const teams = new Set(records.map(r => r.team).filter(Boolean));
     return ['All', ...Array.from(teams)];
@@ -1086,6 +1114,13 @@ export default function App() {
     setTempEndDate(endDate);
   }, [startDate, endDate]);
 
+  // Reset selected branch if it becomes inactive in the current date range filter
+  useEffect(() => {
+    if (selectedBranch !== 'All' && !visibleBranches.includes(selectedBranch)) {
+      setSelectedBranch('All');
+    }
+  }, [selectedBranch, visibleBranches]);
+
   // Click outside listener
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1502,7 +1537,7 @@ export default function App() {
             </thead>
             <tbody>
               <tr className="row-target">
-                <td className="row-type"><span className="emoji-icon">🎯</span> Hạn Mức</td>
+                <td className="row-type"><span className="emoji-icon">🎯</span> Mục Tiêu</td>
                 <td>{target.adsSpend > 0 ? formatCurrency(target.adsSpend) : '—'}</td>
                 <td>{target.showups > 0 ? formatNumber(target.showups) : '—'}</td>
                 <td className="font-semibold">{target.revenue > 0 ? formatCurrency(target.revenue) : '—'}</td>
@@ -1594,13 +1629,13 @@ export default function App() {
                       <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
                       {opTarget.adsSpend > 0 ? (
                         <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.6 }}>
-                          Hạn mức: {formatCurrency(opTarget.adsSpend)}
+                          Mục tiêu: {formatCurrency(opTarget.adsSpend)}
                           <span className={staff.adsSpend > opTarget.adsSpend ? 'c-rose' : 'c-emerald'} style={{ marginLeft: 4 }}>
                             {formatProgress(staff.adsSpend, opTarget.adsSpend)}
                           </span>
                         </div>
                       ) : (
-                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.4 }}>Không hạn mức</div>
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.4 }}>Không mục tiêu</div>
                       )}
                     </td>
                     <td className="text-right">
@@ -1765,7 +1800,7 @@ export default function App() {
         <div className="filter-chips-group">
           <span className="chips-label"><Building2 size={14} /> Chi Nhánh:</span>
           <div className="chips-container">
-            {uniqueBranches.map(b => (
+            {visibleBranches.map(b => (
               <button
                 key={b}
                 type="button"
@@ -2028,7 +2063,7 @@ export default function App() {
           <div className="branch-grid">
             {(selectedBranch !== 'All' 
               ? [selectedBranch] 
-              : uniqueBranches.filter(b => b !== 'All')
+              : visibleBranches.filter(b => b !== 'All')
             ).map(b => renderBranchBox(b))}
           </div>
 
@@ -2273,7 +2308,7 @@ export default function App() {
                   <span className="operator-kpi-val">{formatCurrency(totalSpend)}</span>
                   {opTarget.adsSpend > 0 && (
                     <span style={{ fontSize: '10px', opacity: 0.6 }}>
-                      Hạn mức: {formatCurrency(opTarget.adsSpend)}
+                      Mục tiêu: {formatCurrency(opTarget.adsSpend)}
                     </span>
                   )}
                 </div>
@@ -2284,7 +2319,7 @@ export default function App() {
                   </span>
                   {targetAdsRatio > 0 && (
                     <span style={{ fontSize: '10px', opacity: 0.6 }}>
-                      Hạn mức: {targetAdsRatio.toFixed(1)}%
+                      Mục tiêu: {targetAdsRatio.toFixed(1)}%
                     </span>
                   )}
                 </div>
