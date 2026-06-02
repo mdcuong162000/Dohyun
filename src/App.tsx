@@ -21,7 +21,8 @@ import {
   Play,
   FileSpreadsheet,
   Target,
-  Zap
+  Zap,
+  SlidersHorizontal
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -315,6 +316,16 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   // @ts-ignore
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [showMobileFilter, setShowMobileFilter] = useState<boolean>(false);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedBranch !== 'All') count++;
+    if (selectedTeam !== 'All') count++;
+    if (selectedService !== 'All') count++;
+    if (startDate || endDate) count++;
+    return count;
+  }, [selectedBranch, selectedTeam, selectedService, startDate, endDate]);
 
   // --- DERIVED METADATA ---
   const uniqueBranches = useMemo(() => {
@@ -1569,129 +1580,133 @@ export default function App() {
 
         <div className="branch-service-breakdown">
           <h4 className="breakdown-title">📊 Chi Tiết Theo Dịch Vụ — {branchName}</h4>
-          <table className="breakdown-table">
-            <thead>
-              <tr>
-                <th>Dịch Vụ</th>
-                <th className="text-right">Chi Phí ADS</th>
-                <th className="text-right">Doanh Số</th>
-                <th className="text-right">%ADS/DS</th>
-                <th className="text-right">Số Khách</th>
-                <th className="text-right">CP/Khách</th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map(srv => {
-                const srvAdsRatio = srv.revenue > 0 ? (srv.adsSpend / srv.revenue) * 100 : 0;
-                const cpKhach = srv.showups > 0 ? srv.adsSpend / srv.showups : 0;
-                return (
-                  <tr key={srv.service}>
-                    <td className="srv-name">{srv.service}</td>
-                    <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
-                    <td className="text-right font-mono">{formatCurrency(srv.revenue)}</td>
-                    <td className="text-right font-semibold">{srvAdsRatio > 0 ? `${srvAdsRatio.toFixed(1)}%` : '—'}</td>
-                    <td className="text-right">{formatNumber(srv.showups)}</td>
-                    <td className="text-right font-mono">{cpKhach > 0 ? formatCurrency(cpKhach) : '—'}</td>
-                  </tr>
-                );
-              })}
-              {services.length === 0 && (
+          <div className="table-responsive">
+            <table className="breakdown-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="text-center py-4 text-gray-500">Không có dữ liệu dịch vụ</td>
+                  <th>Dịch Vụ</th>
+                  <th className="text-right">Chi Phí ADS</th>
+                  <th className="text-right">Doanh Số</th>
+                  <th className="text-right">%ADS/DS</th>
+                  <th className="text-right">Số Khách</th>
+                  <th className="text-right">CP/Khách</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {services.map(srv => {
+                  const srvAdsRatio = srv.revenue > 0 ? (srv.adsSpend / srv.revenue) * 100 : 0;
+                  const cpKhach = srv.showups > 0 ? srv.adsSpend / srv.showups : 0;
+                  return (
+                    <tr key={srv.service}>
+                      <td className="srv-name">{srv.service}</td>
+                      <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
+                      <td className="text-right font-mono">{formatCurrency(srv.revenue)}</td>
+                      <td className="text-right font-semibold">{srvAdsRatio > 0 ? `${srvAdsRatio.toFixed(1)}%` : '—'}</td>
+                      <td className="text-right">{formatNumber(srv.showups)}</td>
+                      <td className="text-right font-mono">{cpKhach > 0 ? formatCurrency(cpKhach) : '—'}</td>
+                    </tr>
+                  );
+                })}
+                {services.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-4 text-gray-500">Không có dữ liệu dịch vụ</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="branch-staff-breakdown">
           <h4 className="breakdown-title">👥 Hiệu Suất Từng Nhân Sự — {branchName}</h4>
-          <table className="staff-table">
-            <thead>
-              <tr>
-                <th>Nhân Viên</th>
-                <th>Team</th>
-                <th className="text-right">
-                  <div>Chi Ads</div>
-                  <div className="header-sub-info">Thực / Mục tiêu</div>
-                </th>
-                <th className="text-right">
-                  <div>Leads</div>
-                  <div className="header-sub-info">Thực / Mục tiêu</div>
-                </th>
-                <th className="text-right">
-                  <div>Doanh Số</div>
-                  <div className="header-sub-info">Thực / Mục tiêu</div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {staffList.map(staff => {
-                const opTarget = getOperatorTarget(staff.name, targetMonthStr, activeStart, activeEnd);
-                const formatProgress = (val: number, tgt: number) => {
-                  if (!tgt) return '';
-                  return ` (${((val / tgt) * 100).toFixed(0)}%)`;
-                };
-                return (
-                  <tr key={staff.name}>
-                    <td className="text-left">
-                      <span 
-                        className="staff-clickable-name"
-                        onClick={() => setSelectedOperator({ name: staff.name, branch: branchName, team: staff.team })}
-                      >
-                        {staff.name}
-                      </span>
-                    </td>
-                    <td>{staff.team}</td>
-                    <td className="text-right">
-                      <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
-                      {opTarget.adsSpend > 0 ? (
-                        <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
-                          {formatCurrency(opTarget.adsSpend)}
-                          <span className={staff.adsSpend > opTarget.adsSpend ? 'c-rose' : 'c-emerald'} style={{ marginLeft: 4, fontWeight: 700 }}>
-                            {formatProgress(staff.adsSpend, opTarget.adsSpend)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
-                      )}
-                    </td>
-                    <td className="text-right">
-                      <div className="font-semibold c-blue">{formatNumber(staff.leads)}</div>
-                      {opTarget.leads > 0 ? (
-                        <div className="table-sub-info" style={{ opacity: 0.75 }}>
-                          {formatNumber(opTarget.leads)}
-                          <span className={staff.leads >= opTarget.leads ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
-                            {formatProgress(staff.leads, opTarget.leads)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="table-sub-info" style={{ opacity: 0.4 }}>—</div>
-                      )}
-                    </td>
-                    <td className="text-right">
-                      <div className="font-mono font-semibold c-emerald">{formatCurrency(staff.revenue)}</div>
-                      {opTarget.revenue > 0 ? (
-                        <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
-                          {formatCurrency(opTarget.revenue)}
-                          <span className={staff.revenue >= opTarget.revenue ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
-                            {formatProgress(staff.revenue, opTarget.revenue)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {staffList.length === 0 && (
+          <div className="table-responsive">
+            <table className="staff-table">
+              <thead>
                 <tr>
-                  <td colSpan={5} className="text-center py-4 text-gray-500">Không có dữ liệu nhân sự</td>
+                  <th>Nhân Viên</th>
+                  <th>Team</th>
+                  <th className="text-right">
+                    <div>Chi Ads</div>
+                    <div className="header-sub-info">Thực / Mục tiêu</div>
+                  </th>
+                  <th className="text-right">
+                    <div>Leads</div>
+                    <div className="header-sub-info">Thực / Mục tiêu</div>
+                  </th>
+                  <th className="text-right">
+                    <div>Doanh Số</div>
+                    <div className="header-sub-info">Thực / Mục tiêu</div>
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {staffList.map(staff => {
+                  const opTarget = getOperatorTarget(staff.name, targetMonthStr, activeStart, activeEnd);
+                  const formatProgress = (val: number, tgt: number) => {
+                    if (!tgt) return '';
+                    return ` (${((val / tgt) * 100).toFixed(0)}%)`;
+                  };
+                  return (
+                    <tr key={staff.name}>
+                      <td className="text-left">
+                        <span 
+                          className="staff-clickable-name"
+                          onClick={() => setSelectedOperator({ name: staff.name, branch: branchName, team: staff.team })}
+                        >
+                          {staff.name}
+                        </span>
+                      </td>
+                      <td>{staff.team}</td>
+                      <td className="text-right">
+                        <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
+                        {opTarget.adsSpend > 0 ? (
+                          <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
+                            {formatCurrency(opTarget.adsSpend)}
+                            <span className={staff.adsSpend > opTarget.adsSpend ? 'c-rose' : 'c-emerald'} style={{ marginLeft: 4, fontWeight: 700 }}>
+                              {formatProgress(staff.adsSpend, opTarget.adsSpend)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        <div className="font-semibold c-blue">{formatNumber(staff.leads)}</div>
+                        {opTarget.leads > 0 ? (
+                          <div className="table-sub-info" style={{ opacity: 0.75 }}>
+                            {formatNumber(opTarget.leads)}
+                            <span className={staff.leads >= opTarget.leads ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
+                              {formatProgress(staff.leads, opTarget.leads)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="table-sub-info" style={{ opacity: 0.4 }}>—</div>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        <div className="font-mono font-semibold c-emerald">{formatCurrency(staff.revenue)}</div>
+                        {opTarget.revenue > 0 ? (
+                          <div className="table-sub-info font-mono" style={{ opacity: 0.75 }}>
+                            {formatCurrency(opTarget.revenue)}
+                            <span className={staff.revenue >= opTarget.revenue ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4, fontWeight: 700 }}>
+                              {formatProgress(staff.revenue, opTarget.revenue)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="table-sub-info font-mono" style={{ opacity: 0.4 }}>—</div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {staffList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-4 text-gray-500">Không có dữ liệu nhân sự</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
@@ -1813,7 +1828,39 @@ export default function App() {
 
 
 
-      <section className="filter-panel" id="filters">
+      {/* Mobile filter bar (chỉ hiện trên mobile qua CSS) */}
+      <div className="mobile-filter-bar">
+        <div className="mobile-search-wrapper">
+          <Search size={16} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Tìm nhanh operator, dịch vụ..." 
+            value={searchQuery} 
+            onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
+          />
+        </div>
+        <button 
+          type="button" 
+          className={`btn-mobile-filter ${activeFiltersCount > 0 ? 'active' : ''}`}
+          onClick={() => setShowMobileFilter(true)}
+        >
+          <SlidersHorizontal size={16} />
+          <span>Bộ lọc</span>
+          {activeFiltersCount > 0 && <span className="mobile-filter-badge">{activeFiltersCount}</span>}
+        </button>
+      </div>
+
+      {/* Overlay background cho mobile filter drawer */}
+      {showMobileFilter && (
+        <div className="mobile-filter-drawer-overlay" onClick={() => setShowMobileFilter(false)} />
+      )}
+
+      <section className={`filter-panel ${showMobileFilter ? 'mobile-show' : ''}`} id="filters">
+        <div className="mobile-drawer-header">
+          <h3 className="mobile-drawer-title">Bộ lọc nâng cao</h3>
+          <button type="button" className="btn-close-drawer" onClick={() => setShowMobileFilter(false)}>✕</button>
+        </div>
+
         {/* Row 1: Chi Nhánh Chips */}
         <div className="filter-chips-group">
           <span className="chips-label"><Building2 size={14} /> Chi Nhánh:</span>
@@ -1936,7 +1983,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="filter-group">
+          <div className="filter-group hide-desktop-search">
             <label htmlFor="search-input">Tìm kiếm</label>
             <div className="search-wrapper">
               <Search size={15} className="search-icon" />
@@ -1954,6 +2001,16 @@ export default function App() {
               <RefreshCw size={14} /> Xóa Lọc
             </button>
           </div>
+        </div>
+
+        <div className="mobile-drawer-footer">
+          <button 
+            type="button" 
+            className="btn btn-primary btn-apply-mobile" 
+            onClick={() => setShowMobileFilter(false)}
+          >
+            Áp dụng lọc ({filteredData.length} bản ghi)
+          </button>
         </div>
       </section>
 
