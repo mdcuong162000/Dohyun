@@ -2071,6 +2071,31 @@ option { background: #0d1428; }
   font-family: var(--font-head);
 }
 
+.kpi-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.kpi-detail-row.line-top {
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+.kpi-detail-label {
+  font-size: 11px;
+  color: var(--text-2);
+  opacity: 0.8;
+}
+
+.kpi-detail-val {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-head);
+}
+
 .operator-modal-body {
   flex: 1;
   overflow-y: auto;

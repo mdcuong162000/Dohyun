@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { 
   DollarSign, 
   Users, 
@@ -1430,6 +1430,15 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN').format(val);
   };
 
+  const formatDateDMY = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
 
 
   const serviceRanking = useMemo(() => {
@@ -2253,16 +2262,6 @@ export default function App() {
         const targetMonthStr = startDate ? startDate.substring(0, 7) : '2026-05';
         const opTarget = getOperatorTarget(selectedOperator.name, targetMonthStr, activeStart, activeEnd);
 
-        const completionRate = opTarget.revenue > 0 ? (totalRevenue / opTarget.revenue) * 100 : 0;
-        const remaining = Math.max(0, opTarget.revenue - totalRevenue);
-
-        let completionColor = '#ef4444'; // đỏ
-        if (completionRate >= 89) {
-          completionColor = '#3b82f6'; // xanh dương
-        } else if (completionRate >= 72) {
-          completionColor = '#f97316'; // cam
-        }
-
         const adsRatio = totalRevenue > 0 ? (totalSpend / totalRevenue) * 100 : 0;
         const targetAdsRatio = opTarget.revenue > 0 ? (opTarget.adsSpend / opTarget.revenue) * 100 : 0;
 
@@ -2276,6 +2275,67 @@ export default function App() {
         };
 
         const initials = getInitials(selectedOperator.name);
+
+        // Logic tính toán dailyBreakdown gom nhóm theo ngày
+        const uniqueDates = Array.from(new Set(opRecords.map(r => r.date))).sort();
+        const isMultiDay = uniqueDates.length > 1;
+
+        const dailyBreakdown = uniqueDates.map(date => {
+          const dayRecords = opRecords.filter(r => r.date === date);
+          const dayServiceMap: Record<string, {
+            service: string;
+            adsSpend: number;
+            contacts: number;
+            leads: number;
+            showups: number;
+            revenue: number;
+          }> = {};
+          
+          let dayTotalSpend = 0;
+          let dayTotalContacts = 0;
+          let dayTotalLeads = 0;
+          let dayTotalShowups = 0;
+          let dayTotalRevenue = 0;
+
+          dayRecords.forEach(r => {
+            const srv = r.service || 'Khác';
+            if (!dayServiceMap[srv]) {
+              dayServiceMap[srv] = {
+                service: srv,
+                adsSpend: 0,
+                contacts: 0,
+                leads: 0,
+                showups: 0,
+                revenue: 0
+              };
+            }
+            dayServiceMap[srv].adsSpend += r.ads_spend;
+            dayServiceMap[srv].contacts += r.contacts;
+            dayServiceMap[srv].leads += r.leads;
+            dayServiceMap[srv].showups += r.showups;
+            dayServiceMap[srv].revenue += r.revenue;
+
+            dayTotalSpend += r.ads_spend;
+            dayTotalContacts += r.contacts;
+            dayTotalLeads += r.leads;
+            dayTotalShowups += r.showups;
+            dayTotalRevenue += r.revenue;
+          });
+
+          const dayServices = Object.values(dayServiceMap).sort((a, b) => b.revenue - a.revenue);
+
+          return {
+            date,
+            services: dayServices,
+            total: {
+              adsSpend: dayTotalSpend,
+              contacts: dayTotalContacts,
+              leads: dayTotalLeads,
+              showups: dayTotalShowups,
+              revenue: dayTotalRevenue
+            }
+          };
+        });
 
         return (
           <div className="operator-modal-overlay" onClick={() => setSelectedOperator(null)}>
@@ -2295,47 +2355,77 @@ export default function App() {
 
               <div className="operator-kpi-grid">
                 <div className="operator-kpi-card">
-                  <span className="operator-kpi-label">Mục Tiêu Tháng</span>
-                  <span className="operator-kpi-val">{opTarget.revenue > 0 ? formatCurrency(opTarget.revenue) : '—'}</span>
+                  <span className="operator-kpi-label">Ngân Sách</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className="kpi-detail-val c-emerald">{formatCurrency(totalSpend)}</span>
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>{opTarget.adsSpend > 0 ? formatCurrency(opTarget.adsSpend) : '—'}</span>
+                  </div>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Tương Tác</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className="kpi-detail-val c-blue">{formatNumber(totalContacts)}</span>
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>—</span>
+                  </div>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">SĐT</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className="kpi-detail-val c-blue">{formatNumber(totalLeads)}</span>
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>{opTarget.leads > 0 ? formatNumber(opTarget.leads) : '—'}</span>
+                  </div>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Khách Đến</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className="kpi-detail-val c-emerald">{formatNumber(totalShowups)}</span>
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>—</span>
+                  </div>
                 </div>
                 <div className="operator-kpi-card">
                   <span className="operator-kpi-label">Doanh Số</span>
-                  <span className="operator-kpi-val c-emerald">{formatCurrency(totalRevenue)}</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className="kpi-detail-val c-emerald">{formatCurrency(totalRevenue)}</span>
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>{opTarget.revenue > 0 ? formatCurrency(opTarget.revenue) : '—'}</span>
+                  </div>
                 </div>
                 <div className="operator-kpi-card">
-                  <span className="operator-kpi-label">% Hoàn Thành</span>
-                  <span className="operator-kpi-val" style={{ color: completionColor }}>
-                    {opTarget.revenue > 0 ? `${completionRate.toFixed(1)}%` : '—'}
-                  </span>
-                </div>
-                <div className="operator-kpi-card">
-                  <span className="operator-kpi-label">Còn Thiếu</span>
-                  <span className="operator-kpi-val c-rose">{formatCurrency(remaining)}</span>
-                </div>
-                <div className="operator-kpi-card">
-                  <span className="operator-kpi-label">Chi Phí Ads</span>
-                  <span className="operator-kpi-val">{formatCurrency(totalSpend)}</span>
-                  {opTarget.adsSpend > 0 && (
-                    <span style={{ fontSize: '10px', opacity: 0.6 }}>
-                      Mục tiêu: {formatCurrency(opTarget.adsSpend)}
+                  <span className="operator-kpi-label">% ADS</span>
+                  <div className="kpi-detail-row">
+                    <span className="kpi-detail-label">Thực đạt</span>
+                    <span className={`kpi-detail-val ${adsRatio > (targetAdsRatio || 25) ? 'c-rose' : 'c-emerald'}`}>
+                      {adsRatio > 0 ? `${adsRatio.toFixed(2)}%` : '—'}
                     </span>
-                  )}
-                </div>
-                <div className="operator-kpi-card">
-                  <span className="operator-kpi-label">%Ads/DS</span>
-                  <span className={`operator-kpi-val ${adsRatio > (targetAdsRatio || 25) ? 'c-rose' : 'c-emerald'}`}>
-                    {adsRatio > 0 ? `${adsRatio.toFixed(2)}%` : '—'}
-                  </span>
-                  {targetAdsRatio > 0 && (
-                    <span style={{ fontSize: '10px', opacity: 0.6 }}>
-                      Mục tiêu: {targetAdsRatio.toFixed(1)}%
-                    </span>
-                  )}
+                  </div>
+                  <div className="kpi-detail-row line-top">
+                    <span className="kpi-detail-label">Mục tiêu</span>
+                    <span className="kpi-detail-val font-normal" style={{ opacity: 0.7 }}>{targetAdsRatio > 0 ? `${targetAdsRatio.toFixed(1)}%` : '—'}</span>
+                  </div>
                 </div>
               </div>
 
               <div className="operator-modal-body">
-                <h4 className="operator-table-title">📊 Đo Lường Từng Dịch Vụ</h4>
+                <h4 className="operator-table-title">📊 Đo Lường Lũy Kế Theo Dịch Vụ</h4>
                 <div className="table-responsive">
                   <table className="custom-table">
                     <thead>
@@ -2408,6 +2498,110 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* BẢNG CHI TIẾT THEO NGÀY (breakdown) - chỉ hiện khi khoảng lọc có nhiều hơn 1 ngày */}
+                {isMultiDay && (
+                  <>
+                    <h4 className="operator-table-title" style={{ marginTop: '32px' }}>📅 Chi Tiết Đo Lường Theo Ngày</h4>
+                    <div className="table-responsive">
+                      <table className="custom-table">
+                        <thead>
+                          <tr>
+                            <th>Ngày</th>
+                            <th>Dịch Vụ</th>
+                            <th className="text-right">Ngân Sách</th>
+                            <th className="text-right">Tương Tác</th>
+                            <th className="text-right">Giá TT</th>
+                            <th className="text-right">SĐT</th>
+                            <th className="text-right">Giá SĐT</th>
+                            <th className="text-right">%SĐT/TT</th>
+                            <th className="text-right">Khách Đến</th>
+                            <th className="text-right">Giá Khách Đến</th>
+                            <th className="text-right">%Khách/TT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dailyBreakdown.map(day => {
+                            const daySubtotal = day.total;
+                            const dayCostPerEngagement = daySubtotal.contacts > 0 ? daySubtotal.adsSpend / daySubtotal.contacts : 0;
+                            const dayCostPerLead = daySubtotal.leads > 0 ? daySubtotal.adsSpend / daySubtotal.leads : 0;
+                            const dayLeadsToEngagement = daySubtotal.contacts > 0 ? (daySubtotal.leads / daySubtotal.contacts) * 100 : 0;
+                            const dayCostPerShowup = daySubtotal.showups > 0 ? daySubtotal.adsSpend / daySubtotal.showups : 0;
+                            const dayShowupsToEngagement = daySubtotal.contacts > 0 ? (daySubtotal.showups / daySubtotal.contacts) * 100 : 0;
+
+                            return (
+                              <Fragment key={day.date}>
+                                {/* Dòng subtotal của ngày */}
+                                <tr className="day-subtotal-row" style={{ background: 'rgba(52, 211, 153, 0.12)', fontWeight: 'bold' }}>
+                                  <td>{formatDateDMY(day.date)}</td>
+                                  <td>TỔNG NGÀY</td>
+                                  <td className="text-right font-mono">{formatCurrency(daySubtotal.adsSpend)}</td>
+                                  <td className="text-right">{formatNumber(daySubtotal.contacts)}</td>
+                                  <td className="text-right font-mono">{dayCostPerEngagement > 0 ? formatCurrency(dayCostPerEngagement) : '—'}</td>
+                                  <td className="text-right c-blue">{formatNumber(daySubtotal.leads)}</td>
+                                  <td className="text-right font-mono">{dayCostPerLead > 0 ? formatCurrency(dayCostPerLead) : '—'}</td>
+                                  <td className="text-right c-blue">{dayLeadsToEngagement > 0 ? `${dayLeadsToEngagement.toFixed(1)}%` : '—'}</td>
+                                  <td className="text-right c-emerald">{formatNumber(daySubtotal.showups)}</td>
+                                  <td className="text-right font-mono">{dayCostPerShowup > 0 ? formatCurrency(dayCostPerShowup) : '—'}</td>
+                                  <td className="text-right c-emerald">{dayShowupsToEngagement > 0 ? `${dayShowupsToEngagement.toFixed(1)}%` : '—'}</td>
+                                </tr>
+
+                                {/* Dòng dịch vụ con */}
+                                {day.services.map(srv => {
+                                  const costPerEngagement = srv.contacts > 0 ? srv.adsSpend / srv.contacts : 0;
+                                  const costPerLead = srv.leads > 0 ? srv.adsSpend / srv.leads : 0;
+                                  const leadsToEngagement = srv.contacts > 0 ? (srv.leads / srv.contacts) * 100 : 0;
+                                  const costPerShowup = srv.showups > 0 ? srv.adsSpend / srv.showups : 0;
+                                  const showupsToEngagement = srv.contacts > 0 ? (srv.showups / srv.contacts) * 100 : 0;
+
+                                  return (
+                                    <tr key={`${day.date}_${srv.service}`} className="day-service-row">
+                                      <td style={{ opacity: 0.5 }}>{formatDateDMY(day.date)}</td>
+                                      <td>{srv.service}</td>
+                                      <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
+                                      <td className="text-right">{formatNumber(srv.contacts)}</td>
+                                      <td className="text-right font-mono text-gray-400">{costPerEngagement > 0 ? formatCurrency(costPerEngagement) : '—'}</td>
+                                      <td className="text-right font-semibold c-blue">{formatNumber(srv.leads)}</td>
+                                      <td className="text-right font-mono text-gray-400">{costPerLead > 0 ? formatCurrency(costPerLead) : '—'}</td>
+                                      <td className="text-right font-semibold c-blue">{leadsToEngagement > 0 ? `${leadsToEngagement.toFixed(1)}%` : '—'}</td>
+                                      <td className="text-right font-semibold c-emerald">{formatNumber(srv.showups)}</td>
+                                      <td className="text-right font-mono text-gray-400">{costPerShowup > 0 ? formatCurrency(costPerShowup) : '—'}</td>
+                                      <td className="text-right font-semibold c-emerald">{showupsToEngagement > 0 ? `${showupsToEngagement.toFixed(1)}%` : '—'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </Fragment>
+                            );
+                          })}
+
+                          {/* Dòng TỔNG CỘNG chung cuối bảng */}
+                          {dailyBreakdown.length > 0 && (() => {
+                            const totalCostPerEngagement = totalContacts > 0 ? totalSpend / totalContacts : 0;
+                            const totalCostPerLead = totalLeads > 0 ? totalSpend / totalLeads : 0;
+                            const totalLeadsToEngagement = totalContacts > 0 ? (totalLeads / totalContacts) * 100 : 0;
+                            const totalCostPerShowup = totalShowups > 0 ? totalSpend / totalShowups : 0;
+                            const totalShowupsToEngagement = totalContacts > 0 ? (totalShowups / totalContacts) * 100 : 0;
+
+                            return (
+                              <tr style={{ background: 'rgba(255, 255, 255, 0.08)', fontWeight: 'bold' }}>
+                                <td colSpan={2}>TỔNG CỘNG</td>
+                                <td className="text-right font-mono">{formatCurrency(totalSpend)}</td>
+                                <td className="text-right">{formatNumber(totalContacts)}</td>
+                                <td className="text-right font-mono">{totalCostPerEngagement > 0 ? formatCurrency(totalCostPerEngagement) : '—'}</td>
+                                <td className="text-right c-blue">{formatNumber(totalLeads)}</td>
+                                <td className="text-right font-mono">{totalCostPerLead > 0 ? formatCurrency(totalCostPerLead) : '—'}</td>
+                                <td className="text-right c-blue">{totalLeadsToEngagement > 0 ? `${totalLeadsToEngagement.toFixed(1)}%` : '—'}</td>
+                                <td className="text-right c-emerald">{formatNumber(totalShowups)}</td>
+                                <td className="text-right font-mono">{totalCostPerShowup > 0 ? formatCurrency(totalCostPerShowup) : '—'}</td>
+                                <td className="text-right c-emerald">{totalShowupsToEngagement > 0 ? `${totalShowupsToEngagement.toFixed(1)}%` : '—'}</td>
+                              </tr>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
