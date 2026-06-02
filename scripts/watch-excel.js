@@ -2,15 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 
-const EXCEL_FILE = "/Users/trangle/Downloads/MỤC TIÊU ADS PERFORMANCE.xlsx";
+const DOWNLOADS_DIR = "/Users/trangle/Downloads";
+const WATCHED_FILES = [
+  "BIN ADS - 2026.xlsx",
+  "Huehoo- ADS.xlsx",
+  "MỤC TIÊU ADS PERFORMANCE (1).xlsx",
+  "BÁO CÁO TỔNG DOHYUN GROUP (1).xlsx"
+];
 const PARSER_SCRIPT = "/Users/trangle/.gemini/antigravity/brain/bab73d74-70b3-4630-b7f1-5d9460560be4/scratch/parse_excel.py";
 
-console.log(`[Watcher] Khởi động giám sát file Excel: ${EXCEL_FILE}`);
+console.log(`[Watcher] Khởi động giám sát 4 tệp Excel...`);
 
 let debounceTimer = null;
 
 function runParser() {
-  console.log(`[Watcher] Phát hiện thay đổi. Đang phân tích lại file Excel...`);
+  console.log(`[Watcher] Phát hiện thay đổi trong tệp Excel. Đang phân tích lại...`);
   exec(`python3 "${PARSER_SCRIPT}"`, (error, stdout, stderr) => {
     if (error) {
       console.error(`[Watcher] ❌ Lỗi khi phân tích Excel:`, error.message);
@@ -21,33 +27,24 @@ function runParser() {
       return;
     }
     console.log(`[Watcher] ✅ Hoàn thành cập nhật dữ liệu mới!`);
-    if (stdout) {
-      const lines = stdout.split('\n');
-      const totalProcessed = lines.find(l => l.includes('Total processed records'));
-      if (totalProcessed) console.log(`[Watcher] ${totalProcessed}`);
-    }
   });
 }
 
-// Watch using fs.watch
-// Excel saving can trigger multiple events (rename, change) very quickly. We debounce them.
 try {
-  // Watch the parent directory to handle Excel's temporary file creation/deletion mechanism safely
-  const targetDir = path.dirname(EXCEL_FILE);
-  const targetFile = path.basename(EXCEL_FILE);
-
-  fs.watch(targetDir, (eventType, filename) => {
-    if (filename === targetFile) {
+  fs.watch(DOWNLOADS_DIR, (eventType, filename) => {
+    if (filename && WATCHED_FILES.includes(filename)) {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        if (fs.existsSync(EXCEL_FILE)) {
+        const fullPath = path.join(DOWNLOADS_DIR, filename);
+        if (fs.existsSync(fullPath)) {
+          console.log(`[Watcher] File thay đổi: ${filename}`);
           runParser();
         }
       }, 500); // Debounce 500ms
     }
   });
 
-  console.log(`[Watcher] Đang lắng nghe thay đổi của file Excel...`);
+  console.log(`[Watcher] Đang lắng nghe thay đổi của các file:`, WATCHED_FILES);
 } catch (e) {
   console.error(`[Watcher] ❌ Không thể khởi động giám sát:`, e.message);
 }

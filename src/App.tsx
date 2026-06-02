@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   DollarSign, 
   Users, 
@@ -62,22 +62,14 @@ interface DailyRecord {
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3a86ff', '#06d6a0', '#ff006e', '#8338ec', '#ffbe0b'];
 
-const BRANCH_TARGETS: Record<string, Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }>> = {
-  '2026-05': {
-    'Đà Nẵng': { revenue: 2643447692, adsSpend: 700000000, leads: 1444, showups: 389 },
-    'Nha Trang': { revenue: 1500000000, adsSpend: 400000000, leads: 800, showups: 200 },
-    'Hồ Chí Minh': { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 },
-    'BMT': { revenue: 400000000, adsSpend: 120000000, leads: 200, showups: 50 },
-    'Long Xuyên': { revenue: 300000000, adsSpend: 90000000, leads: 150, showups: 40 }
-  },
-  '2026-04': {
-    'Đà Nẵng': { revenue: 2500000000, adsSpend: 750000000, leads: 1400, showups: 380 },
-    'Nha Trang': { revenue: 1400000000, adsSpend: 380000000, leads: 750, showups: 190 },
-    'Hồ Chí Minh': { revenue: 480000000, adsSpend: 140000000, leads: 280, showups: 75 },
-    'BMT': { revenue: 380000000, adsSpend: 110000000, leads: 190, showups: 45 },
-    'Long Xuyên': { revenue: 280000000, adsSpend: 85000000, leads: 140, showups: 38 }
-  }
+const SPREADSHEET_IDS = {
+  BIN: "1EwCPma0-YrmJbbdifJ8MW_LrHiI-D3s4zcG7HRuC2Xg",
+  TARGET: "K0nveS0gpHeK0K3hlyWodoR2CI4J48xsMTwKo1wkFYQ",
+  HUEHOO: "1l8sZhn2IWbV_f5WSRiOcSV9zU_NRFiIZBZfOd9X5tcU",
+  TOTAL: "RcGc7oicDUzSa7-oCX27ZJNOjWllQGZJJeJ5K1Y4zUM"
 };
+
+import targetMockData from './data/dohyun_targets.json';
 
 function getDaysList(start: string, end: string): string[] {
   if (!start || !end) return [];
@@ -98,137 +90,168 @@ function getDaysList(start: string, end: string): string[] {
   return days;
 }
 
-const getBranchTarget = (branchName: string, dateStr: string, startDate?: string, endDate?: string) => {
-  if (startDate && endDate) {
-    const days = getDaysList(startDate, endDate);
-    let totalRevenue = 0;
-    let totalAdsSpend = 0;
-    let totalLeads = 0;
-    let totalShowups = 0;
-    
-    days.forEach(day => {
-      const monthKey = day.substring(0, 7);
-      const [yStr, mStr] = monthKey.split('-');
-      const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
-      
-      let monthTarget = BRANCH_TARGETS[monthKey]?.[branchName];
-      if (!monthTarget) {
-        const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
-          'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
-          'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
-          'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
-          'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
+const cleanNum = (val: any): number => {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim().replace(/\s/g, '');
+  if (str === '-' || str === 'd' || str === 'đ' || str === 'đ/sđt' || str === 'đ/khách') return 0;
+  
+  const isPercent = str.includes('%');
+  const cleanStr = str.replace(/[^\d.,-]/g, '');
+  if (!cleanStr || cleanStr === '-') return 0;
+  let num = 0;
+  if (cleanStr.includes('.') && !cleanStr.includes(',')) {
+    const parts = cleanStr.split('.');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      num = parseFloat(cleanStr.replace(/\./g, ''));
+    } else {
+      num = parseFloat(cleanStr);
+    }
+  } else {
+    num = parseFloat(cleanStr.replace(/,/g, ''));
+  }
+  
+  if (isNaN(num)) return 0;
+  return isPercent ? num / 100 : num;
+};
+
+const parseTargetsFromSheet = (rows: any[][]) => {
+  const monthData: any = { branches: {}, operators: {} };
+  if (!rows || rows.length === 0) return monthData;
+
+  // 1. Đà Nẵng branch goals
+  let dnRow = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const rowStr = rows[r].filter(val => val !== null && val !== undefined).join(" ").toUpperCase();
+    if (rowStr.includes("MỤC TIÊU ĐÀ NẴNG") && rowStr.includes("THEO ADS")) {
+      dnRow = r;
+      break;
+    }
+  }
+  if (dnRow !== -1) {
+    for (let r = dnRow + 1; r < Math.min(rows.length, dnRow + 8); r++) {
+      if (String(rows[r][0]).trim() === "TỔNG") {
+        monthData.branches["Đà Nẵng"] = {
+          revenue: cleanNum(rows[r][9]),
+          adsSpend: cleanNum(rows[r][2]),
+          leads: Math.round(cleanNum(rows[r][5])),
+          showups: Math.round(cleanNum(rows[r][7]))
         };
-        monthTarget = defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
+        break;
       }
-      
-      totalRevenue += monthTarget.revenue / daysCount;
-      totalAdsSpend += monthTarget.adsSpend / daysCount;
-      totalLeads += monthTarget.leads / daysCount;
-      totalShowups += monthTarget.showups / daysCount;
-    });
-    
-    return {
-      revenue: Math.round(totalRevenue),
-      adsSpend: Math.round(totalAdsSpend),
-      leads: Math.round(totalLeads),
-      showups: Math.round(totalShowups)
-    };
-  }
-
-  const monthKey = dateStr || '2026-05';
-  if (BRANCH_TARGETS[monthKey] && BRANCH_TARGETS[monthKey][branchName]) {
-    return BRANCH_TARGETS[monthKey][branchName];
-  }
-  
-  const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
-    'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
-    'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
-    'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
-    'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
-  };
-  return defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
-};
-
-const OPERATOR_TARGETS: Record<string, Record<string, Record<string, { adsSpend: number, leads: number, revenue: number }>>> = {
-  '2026-05': {
-    'Đà Nẵng': {
-      'HUẾ': { adsSpend: 343000000, leads: 708, revenue: 1295727497 },
-      'BIN': { adsSpend: 231000000, leads: 517, revenue: 947313231 },
-      'NHI': { adsSpend: 126000000, leads: 219, revenue: 400406965 },
-      'THẮNG': { adsSpend: 90322580, leads: 150, revenue: 300000000 },
-      'HỒNG': { adsSpend: 10000000, leads: 20, revenue: 40000000 },
-      'TÀI': { adsSpend: 10000000, leads: 20, revenue: 40000000 }
-    },
-    'Nha Trang': {
-      'HỒNG': { adsSpend: 168000000, leads: 279, revenue: 510510000 },
-      'BIN': { adsSpend: 70000000, leads: 109, revenue: 200000000 },
-      'HUẾ': { adsSpend: 94500000, leads: 277, revenue: 507000000 },
-      'ĐỨC': { adsSpend: 20000000, leads: 50, revenue: 100000000 }
-    }
-  },
-  '2026-04': {
-    'Đà Nẵng': {
-      'HUẾ': { adsSpend: 382500000, leads: 700, revenue: 1200000000 },
-      'BIN': { adsSpend: 240000000, leads: 500, revenue: 900000000 },
-      'NHI': { adsSpend: 127500000, leads: 200, revenue: 380000000 }
-    },
-    'Nha Trang': {
-      'BIN': { adsSpend: 140000000, leads: 250, revenue: 500000000 },
-      'HUẾ': { adsSpend: 240000000, leads: 450, revenue: 900000000 },
-      'ĐỨC': { adsSpend: 20000000, leads: 40, revenue: 80000000 },
-      'HỒNG': { adsSpend: 50000000, leads: 80, revenue: 150000000 }
     }
   }
-};
 
-const getOperatorTarget = (opName: string, branchName: string, dateStr: string, startDate?: string, endDate?: string) => {
-  if (startDate && endDate) {
-    const days = getDaysList(startDate, endDate);
-    let totalRevenue = 0;
-    let totalAdsSpend = 0;
-    let totalLeads = 0;
-    
-    days.forEach(day => {
-      const monthKey = day.substring(0, 7);
-      const [yStr, mStr] = monthKey.split('-');
-      const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
-      
-      const monthMap = OPERATOR_TARGETS[monthKey] || OPERATOR_TARGETS['2026-05'];
-      const branchMap = monthMap[branchName] || {};
-      const opTarget = branchMap[opName.trim().toUpperCase()];
-      
-      if (opTarget) {
-        totalRevenue += opTarget.revenue / daysCount;
-        totalAdsSpend += opTarget.adsSpend / daysCount;
-        totalLeads += opTarget.leads / daysCount;
+  // 2. Nha Trang branch goals
+  let ntRow = -1;
+  let ntCol = -1;
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 10; c < (rows[r]?.length || 0); c++) {
+      const val = String(rows[r][c]).toUpperCase();
+      if (val.includes("MỤC TIÊU NHA TRANG") && !val.includes("TELESALE")) {
+        ntRow = r;
+        ntCol = c;
+        break;
       }
-    });
-    
-    return {
-      revenue: Math.round(totalRevenue),
-      adsSpend: Math.round(totalAdsSpend),
-      leads: Math.round(totalLeads)
-    };
+    }
+    if (ntRow !== -1) break;
+  }
+  if (ntRow !== -1) {
+    for (let r = ntRow + 1; r < Math.min(rows.length, ntRow + 8); r++) {
+      if (String(rows[r][ntCol]).trim() === "TỔNG") {
+        monthData.branches["Nha Trang"] = {
+          revenue: cleanNum(rows[r][ntCol + 9]),
+          adsSpend: cleanNum(rows[r][ntCol + 2]),
+          leads: Math.round(cleanNum(rows[r][ntCol + 5])),
+          showups: Math.round(cleanNum(rows[r][ntCol + 7]))
+        };
+        break;
+      }
+    }
   }
 
-  const monthKey = dateStr || '2026-05';
-  const monthMap = OPERATOR_TARGETS[monthKey] || OPERATOR_TARGETS['2026-05'];
-  const branchMap = monthMap[branchName] || {};
-  const opTarget = branchMap[opName.trim().toUpperCase()];
-  
-  if (opTarget) {
-    return opTarget;
+  // 3. Đà Nẵng Operators allocation
+  let pbRow = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const rowStr = rows[r].filter(val => val !== null && val !== undefined).join(" ").toUpperCase();
+    if (rowStr.includes("PHÂN BỔ NGÂN SÁCH")) {
+      pbRow = r;
+      break;
+    }
   }
-  
-  return { adsSpend: 0, leads: 0, revenue: 0 };
+  if (pbRow !== -1) {
+    const headerRowIdx = pbRow + 3;
+    if (headerRowIdx < rows.length) {
+      const opsRows: { name: string, rowIdx: number }[] = [];
+      let rIdx = headerRowIdx;
+      while (rIdx < rows.length) {
+        const valCol10 = String(rows[rIdx][10] || '').trim().toUpperCase();
+        if (["HUẾ", "BIN", "ĐỨC"].includes(valCol10) && rows[rIdx][11] && cleanNum(rows[rIdx][11]) > 1000000) {
+          opsRows.push({ name: valCol10, rowIdx: rIdx });
+        }
+        rIdx++;
+        if (rIdx - headerRowIdx > 12) break;
+      }
+
+      opsRows.forEach(({ name, rowIdx }) => {
+        const opKey = name.trim().toUpperCase();
+        monthData.operators[opKey] = {
+          adsSpend: cleanNum(rows[rowIdx][11]),
+          leads: Math.round(cleanNum(rows[rowIdx][13])),
+          revenue: cleanNum(rows[rowIdx][15]),
+          services: {}
+        };
+
+        const servicesTargets: Record<string, { adsSpend: number, revenue: number }> = {};
+        let rSrv = headerRowIdx + 1;
+        let currentSrv = "";
+        while (rSrv < rows.length) {
+          const rowVals = rows[rSrv];
+          const srvVal = String(rowVals[1] || '').trim();
+          if (srvVal) {
+            currentSrv = srvVal;
+          }
+          if (currentSrv === "TỔNG" || currentSrv === "") {
+            rSrv++;
+            continue;
+          }
+          const indicator = String(rowVals[0] || '').toUpperCase();
+          if (indicator.includes("4. SỐ LƯỢNG") || indicator.includes("NGÂN SÁCH")) {
+            break;
+          }
+          const runnerVal = String(rowVals[4] || '').trim().toUpperCase();
+          if (runnerVal === opKey) {
+            servicesTargets[currentSrv] = {
+              adsSpend: cleanNum(rowVals[3]),
+              revenue: cleanNum(rowVals[9])
+            };
+          }
+          rSrv++;
+        }
+        monthData.operators[opKey].services = servicesTargets;
+      });
+    }
+  }
+
+  return monthData;
 };
 
-
+const parseMonthlyReportTargets = (rows: any[][]) => {
+  if (!rows || rows.length === 0 || rows[0].length < 28) return null;
+  const row0 = rows[0].map(x => String(x || '').trim().toUpperCase());
+  const colIdxTotal = row0.findIndex(val => val.includes("TỔNG") || val.includes("TỔNG THÁNG"));
+  if (colIdxTotal !== -1) {
+    const adsSpend = cleanNum(rows[1][16]);
+    const leads = Math.round(cleanNum(rows[1][21]));
+    const showups = Math.round(cleanNum(rows[1][24]));
+    const revenue = cleanNum(rows[1][27]);
+    return { revenue, adsSpend, leads, showups };
+  }
+  return null;
+};
 
 let tokenClient: any = null;
 
-// Helper: Custom CSV Parser to handle commas inside double quotes correctly
 function parseCSV(text: string): string[][] {
   const lines: string[][] = [];
   let row: string[] = [];
@@ -242,7 +265,7 @@ function parseCSV(text: string): string[][] {
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
         currentVal += '"';
-        i++; // skip next quote
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
@@ -251,7 +274,7 @@ function parseCSV(text: string): string[][] {
       currentVal = '';
     } else if ((char === '\r' || char === '\n') && !inQuotes) {
       if (char === '\r' && nextChar === '\n') {
-        i++; // skip \n
+        i++;
       }
       row.push(currentVal);
       lines.push(row);
@@ -280,6 +303,145 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [records, setRecords] = useState<DailyRecord[]>([]);
+  const [targets, setTargets] = useState<any>(targetMockData);
+  const [selectedOperator, setSelectedOperator] = useState<any | null>(null);
+
+  // --- FILTER STATE ---
+  const [selectedBranch, setSelectedBranch] = useState<string>('All');
+  const [selectedTeam, setSelectedTeam] = useState<string>('All');
+  const [selectedService, setSelectedService] = useState<string>('All');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  // @ts-ignore
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // --- DERIVED METADATA ---
+  const uniqueBranches = useMemo(() => {
+    const branches = new Set(records.map(r => r.branch).filter(Boolean));
+    return ['All', ...Array.from(branches)];
+  }, [records]);
+
+  const uniqueTeams = useMemo(() => {
+    const teams = new Set(records.map(r => r.team).filter(Boolean));
+    return ['All', ...Array.from(teams)];
+  }, [records]);
+
+  const uniqueServices = useMemo(() => {
+    const services = new Set(records.map(r => r.service).filter(Boolean));
+    return ['All', ...Array.from(services)];
+  }, [records]);
+
+  const { minDate, maxDate } = useMemo(() => {
+    if (!records.length) return { minDate: '', maxDate: '' };
+    const dates = records.map(r => r.date).sort();
+    return { minDate: dates[0], maxDate: dates[dates.length - 1] };
+  }, [records]);
+
+  // --- TARGET LOOKUP HELPERS ---
+  const getBranchTarget = (branchName: string, dateStr: string, startDateVal?: string, endDateVal?: string) => {
+    const activeStart = startDateVal || startDate || minDate;
+    const activeEnd = endDateVal || endDate || maxDate;
+    if (activeStart && activeEnd) {
+      const days = getDaysList(activeStart, activeEnd);
+      let totalRevenue = 0;
+      let totalAdsSpend = 0;
+      let totalLeads = 0;
+      let totalShowups = 0;
+      
+      days.forEach(day => {
+        const monthKey = day.substring(0, 7);
+        const [yStr, mStr] = monthKey.split('-');
+        const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
+        
+        let monthTarget = targets[monthKey]?.branches?.[branchName];
+        if (!monthTarget) {
+          const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
+            'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
+            'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
+            'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
+            'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
+          };
+          monthTarget = defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
+        }
+        
+        totalRevenue += monthTarget.revenue / daysCount;
+        totalAdsSpend += monthTarget.adsSpend / daysCount;
+        totalLeads += monthTarget.leads / daysCount;
+        totalShowups += monthTarget.showups / daysCount;
+      });
+      
+      return {
+        revenue: Math.round(totalRevenue),
+        adsSpend: Math.round(totalAdsSpend),
+        leads: Math.round(totalLeads),
+        showups: Math.round(totalShowups)
+      };
+    }
+
+    const monthKey = dateStr || '2026-05';
+    if (targets[monthKey]?.branches?.[branchName]) {
+      return targets[monthKey].branches[branchName];
+    }
+    
+    const defaults: Record<string, { revenue: number, adsSpend: number, leads: number, showups: number }> = {
+      'Đà Nẵng': { revenue: 2000000000, adsSpend: 600000000, leads: 1200, showups: 300 },
+      'Nha Trang': { revenue: 700000000, adsSpend: 200000000, leads: 400, showups: 100 },
+      'Hồ Chí Minh': { revenue: 400000000, adsSpend: 120000000, leads: 250, showups: 70 },
+      'BMT': { revenue: 300000000, adsSpend: 100000000, leads: 180, showups: 40 },
+    };
+    return defaults[branchName] || { revenue: 500000000, adsSpend: 150000000, leads: 300, showups: 80 };
+  };
+
+  const getOperatorTarget = (opName: string, dateStr: string, startDateVal?: string, endDateVal?: string) => {
+    const activeStart = startDateVal || startDate || minDate;
+    const activeEnd = endDateVal || endDate || maxDate;
+    const opKeyClean = opName.trim().toUpperCase();
+
+    if (activeStart && activeEnd) {
+      const days = getDaysList(activeStart, activeEnd);
+      let totalRevenue = 0;
+      let totalAdsSpend = 0;
+      let totalLeads = 0;
+      
+      days.forEach(day => {
+        const monthKey = day.substring(0, 7);
+        const [yStr, mStr] = monthKey.split('-');
+        const daysCount = new Date(parseInt(yStr), parseInt(mStr), 0).getDate();
+        
+        const monthMap = targets[monthKey] || {};
+        const opTarget = monthMap.operators?.[opKeyClean];
+        
+        if (opTarget) {
+          totalRevenue += opTarget.revenue / daysCount;
+          totalAdsSpend += opTarget.adsSpend / daysCount;
+          totalLeads += opTarget.leads / daysCount;
+        }
+      });
+      
+      return {
+        revenue: Math.round(totalRevenue),
+        adsSpend: Math.round(totalAdsSpend),
+        leads: Math.round(totalLeads),
+        services: targets[activeStart?.substring(0, 7) || '2026-05']?.operators?.[opKeyClean]?.services || {}
+      };
+    }
+
+    const monthKey = dateStr || '2026-05';
+    const monthMap = targets[monthKey] || {};
+    const opTarget = monthMap.operators?.[opKeyClean];
+    
+    if (opTarget) {
+      return {
+        revenue: opTarget.revenue,
+        adsSpend: opTarget.adsSpend,
+        leads: opTarget.leads,
+        services: opTarget.services || {}
+      };
+    }
+    
+    return { adsSpend: 0, leads: 0, revenue: 0, services: {} };
+  };
 
   // Env variables
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -395,42 +557,154 @@ export default function App() {
     return parsedRecords;
   };
 
-  // --- INITIAL DATA LOAD (Direct Public CSV Fetch on mount) ---
+  // --- HELPERS FOR ONLINE DATA SYNCING ---
+  const fetchSheetData = async (sheetId: string) => {
+    try {
+      const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`;
+      const metadataRes = await fetch(metadataUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!metadataRes.ok) return [];
+      const metadata = await metadataRes.json();
+      const sheets = metadata.sheets || [];
+      const sheetTitles = sheets.map((s: any) => s.properties?.title || '');
+      
+      let targetSheetName = '';
+      const exactDaily = sheetTitles.find((t: string) => t === 'Daily');
+      const exactDataimp = sheetTitles.find((t: string) => t === 'Dataimp');
+      const containsDaily = sheetTitles.find((t: string) => t.toLowerCase().includes('daily'));
+      const containsData = sheetTitles.find((t: string) => t.toLowerCase().includes('data'));
+      
+      if (exactDaily) targetSheetName = exactDaily;
+      else if (exactDataimp) targetSheetName = exactDataimp;
+      else if (containsDaily) targetSheetName = containsDaily;
+      else if (containsData) targetSheetName = containsData;
+      else targetSheetName = sheetTitles[0];
+      
+      const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(targetSheetName)}`;
+      const apiRes = await fetch(apiUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!apiRes.ok) return [];
+      const data = await apiRes.json();
+      return parseSheetsData(data.values);
+    } catch (e) {
+      console.error(`Error fetching sheet ${sheetId}:`, e);
+      return [];
+    }
+  };
+
+  const fetchTargetsOnline = async (monthStr: string) => {
+    const [year, month] = monthStr.split('-');
+    const monthNum = parseInt(month);
+    const targetSheetName = `MỤC TIÊU ADS T${monthNum}${year}`;
+    
+    try {
+      const targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_IDS.TARGET}/values/${encodeURIComponent(targetSheetName)}`;
+      const targetRes = await fetch(targetUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!targetRes.ok) return null;
+      const targetData = await targetRes.json();
+      const parsed = parseTargetsFromSheet(targetData.values);
+      
+      const ntReportSheetName = `NHA TRANG THÁNG ${monthNum}`;
+      const ntUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_IDS.HUEHOO}/values/${encodeURIComponent(ntReportSheetName)}`;
+      const ntRes = await fetch(ntUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (ntRes.ok) {
+        const ntData = await ntRes.json();
+        const ntTarget = parseMonthlyReportTargets(ntData.values);
+        parsed.branches["Nha Trang"] = ntTarget;
+      }
+      
+      const dnReportSheetName = `ĐÀ NẴNG THÁNG ${monthNum}`;
+      const dnUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_IDS.BIN}/values/${encodeURIComponent(dnReportSheetName)}`;
+      const dnRes = await fetch(dnUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (dnRes.ok) {
+        const dnData = await dnRes.json();
+        const dnTarget = parseMonthlyReportTargets(dnData.values);
+        if (dnTarget && (!parsed.branches["Đà Nẵng"] || parsed.branches["Đà Nẵng"].revenue === 0)) {
+          parsed.branches["Đà Nẵng"] = dnTarget;
+        }
+      }
+      
+      return parsed;
+    } catch (e) {
+      console.error("Error fetching online targets:", e);
+      return null;
+    }
+  };
+
+  // --- INITIAL DATA LOAD & MERGING OF 4 SHEETS ---
   useEffect(() => {
-    const tryPublicSync = async () => {
+    const syncAllData = async () => {
       setIsLoading(true);
       setAuthError('');
+      
+      const fetchPublicCSV = async (sheetId: string) => {
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=Daily`;
+        try {
+          let res = await fetch(url);
+          if (!res.ok) {
+            const url2 = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=Dataimp`;
+            res = await fetch(url2);
+            if (!res.ok) return [];
+          }
+          const csvText = await res.text();
+          if (csvText.includes('google-site-verification') || csvText.includes('<!DOCTYPE html>') || csvText.includes('login')) {
+            const url2 = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&sheet=Dataimp`;
+            const res2 = await fetch(url2);
+            if (!res2.ok) return [];
+            const csvText2 = await res2.text();
+            if (csvText2.includes('google-site-verification') || csvText2.includes('<!DOCTYPE html>') || csvText2.includes('login')) {
+              return [];
+            }
+            return parseCSV(csvText2);
+          }
+          return parseCSV(csvText);
+        } catch (e) {
+          return [];
+        }
+      };
+
       try {
-        // Try fetching Google Sheet CSV directly (works if the link sharing is set to "Anyone with link can view")
-        const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&sheet=Daily`;
-        const res = await fetch(url);
+        const [binCSV, targetCSV, huehooCSV, totalCSV] = await Promise.all([
+          fetchPublicCSV(SPREADSHEET_IDS.BIN),
+          fetchPublicCSV(SPREADSHEET_IDS.TARGET),
+          fetchPublicCSV(SPREADSHEET_IDS.HUEHOO),
+          fetchPublicCSV(SPREADSHEET_IDS.TOTAL)
+        ]);
         
-        if (!res.ok) {
-          throw new Error('Tệp chưa được bật chia sẻ công khai.');
-        }
-
-        const csvText = await res.text();
-        if (csvText.includes('google-site-verification') || csvText.includes('<!DOCTYPE html>') || csvText.includes('login')) {
-          throw new Error('Tệp đang ở chế độ Riêng tư (Private). Yêu cầu đăng nhập Google.');
-        }
-
-        const rows = parseCSV(csvText);
-        const parsed = parseSheetsData(rows);
-        if (parsed.length > 0) {
-          setRecords(parsed);
+        const binParsed = parseSheetsData(binCSV);
+        const targetParsed = parseSheetsData(targetCSV);
+        const huehooParsed = parseSheetsData(huehooCSV);
+        const totalParsed = parseSheetsData(totalCSV);
+        
+        const allRecords = [...binParsed, ...targetParsed, ...huehooParsed, ...totalParsed];
+        if (allRecords.length > 0) {
+          const mergedMap = new Map<string, DailyRecord>();
+          allRecords.forEach(r => {
+            const key = `${r.date}_${r.team.toUpperCase()}_${r.branch.toUpperCase()}_${r.operator.toUpperCase()}_${r.service.toUpperCase()}_${r.bm.toUpperCase()}`;
+            const existing = mergedMap.get(key);
+            if (!existing || r.ads_spend > existing.ads_spend) {
+              mergedMap.set(key, r);
+            }
+          });
+          setRecords(Array.from(mergedMap.values()));
           setIsDemoMode(false);
           setIsLoading(false);
-          return; // Success! Skip auth flow entirely.
+          return;
         }
       } catch (err) {
-        console.log('[Sync] Bảng tính Google Sheet ở chế độ riêng tư hoặc link lỗi. Chuyển sang xác thực Google.');
+        console.log('[Sync] Public sync failed or private. Switching to Google OAuth.');
       }
 
-      // If direct CSV fetch failed:
-      // Try Google Sheets API OAuth fetch if we have an active access token
       if (accessToken) {
         try {
-          // Fetch user info first to show which Gmail is logged in
           let email = userEmail;
           if (!email) {
             try {
@@ -445,74 +719,30 @@ export default function App() {
                   setUserEmail(email);
                 }
               }
-            } catch (e) {
-              console.log('Không thể lấy thông tin email user:', e);
-            }
+            } catch (e) {}
           }
 
-          // Step 1: Get spreadsheet metadata to find available sheet names
-          const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
-          const metadataRes = await fetch(metadataUrl, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          });
+          const [binData, targetData, huehooData, totalData] = await Promise.all([
+            fetchSheetData(SPREADSHEET_IDS.BIN),
+            fetchSheetData(SPREADSHEET_IDS.TARGET),
+            fetchSheetData(SPREADSHEET_IDS.HUEHOO),
+            fetchSheetData(SPREADSHEET_IDS.TOTAL)
+          ]);
 
-          if (metadataRes.status === 401) {
-            handleLogout();
-            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          const allRecords = [...binData, ...targetData, ...huehooData, ...totalData];
+          if (allRecords.length === 0) {
+            throw new Error('Không thể lấy dữ liệu từ 4 sheet online. Hãy đảm bảo tài khoản Gmail đã có quyền truy cập.');
           }
 
-          if (metadataRes.status === 403) {
-            throw new Error('Bạn không có quyền truy cập vào Google Sheet này. Hãy chắc chắn tài khoản Gmail này đã được phân quyền xem trên Google Drive.');
-          }
-
-          if (!metadataRes.ok) {
-            throw new Error(`Không thể đọc thông tin cấu trúc Google Sheet. Mã lỗi: ${metadataRes.status}`);
-          }
-
-          const metadata = await metadataRes.json();
-          const sheets = metadata.sheets || [];
-          if (sheets.length === 0) {
-            throw new Error('Tệp Google Sheet này không chứa trang tính (tab) nào.');
-          }
-
-          // Step 2: Determine target sheet name (prefer 'Daily', then 'Dataimp', then any containing 'daily'/'data', fallback to first sheet)
-          let targetSheetName = '';
-          const sheetTitles = sheets.map((s: any) => s.properties?.title || '');
-          
-          const exactDaily = sheetTitles.find((t: string) => t === 'Daily');
-          const exactDataimp = sheetTitles.find((t: string) => t === 'Dataimp');
-          const containsDaily = sheetTitles.find((t: string) => t.toLowerCase().includes('daily'));
-          const containsData = sheetTitles.find((t: string) => t.toLowerCase().includes('data'));
-          
-          if (exactDaily) {
-            targetSheetName = exactDaily;
-          } else if (exactDataimp) {
-            targetSheetName = exactDataimp;
-          } else if (containsDaily) {
-            targetSheetName = containsDaily;
-          } else if (containsData) {
-            targetSheetName = containsData;
-          } else {
-            targetSheetName = sheetTitles[0]; // fallback to first sheet
-          }
-
-          // Step 3: Fetch values from the chosen sheet
-          const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}`;
-          const apiRes = await fetch(apiUrl, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
+          const mergedMap = new Map<string, DailyRecord>();
+          allRecords.forEach(r => {
+            const key = `${r.date}_${r.team.toUpperCase()}_${r.branch.toUpperCase()}_${r.operator.toUpperCase()}_${r.service.toUpperCase()}_${r.bm.toUpperCase()}`;
+            const existing = mergedMap.get(key);
+            if (!existing || r.ads_spend > existing.ads_spend) {
+              mergedMap.set(key, r);
             }
           });
-
-          if (!apiRes.ok) {
-            throw new Error(`Không thể lấy dữ liệu từ tab '${targetSheetName}'. Mã lỗi: ${apiRes.status}`);
-          }
-
-          const data = await apiRes.json();
-          const parsed = parseSheetsData(data.values);
-          setRecords(parsed);
+          setRecords(Array.from(mergedMap.values()));
           setIsDemoMode(false);
         } catch (err: any) {
           console.error('[Sync] Lỗi OAuth fetch:', err);
@@ -520,14 +750,32 @@ export default function App() {
           setRecords([]);
         }
       } else {
-        // No token, no public access -> default to demo mode or prompt login screen
         setRecords([]);
       }
       setIsLoading(false);
     };
 
-    tryPublicSync();
-  }, [accessToken, spreadsheetId]);
+    syncAllData();
+  }, [accessToken]);
+
+  // Load online targets dynamically on date range / selected month change
+  useEffect(() => {
+    if (!accessToken) return;
+    const activeStart = startDate || minDate;
+    if (!activeStart) return;
+    const monthKey = activeStart.substring(0, 7);
+    
+    const loadOnlineTargets = async () => {
+      const onlineTargets = await fetchTargetsOnline(monthKey);
+      if (onlineTargets) {
+        setTargets((prev: any) => ({
+          ...prev,
+          [monthKey]: onlineTargets
+        }));
+      }
+    };
+    loadOnlineTargets();
+  }, [accessToken, startDate, minDate]);
 
   // --- INITIALIZE GOOGLE OAUTH CLIENT SDK ---
   useEffect(() => {
@@ -585,44 +833,7 @@ export default function App() {
     setIsDemoMode(true);
   };
 
-  // --- FILTER STATE ---
 
-
-  const [selectedBranch, setSelectedBranch] = useState<string>('All');
-  const [selectedTeam, setSelectedTeam] = useState<string>('All');
-  const [selectedService, setSelectedService] = useState<string>('All');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  
-  // Table sorting & pagination
-  // const [sortBy, setSortBy] = useState<keyof DailyRecord>('date');
-  // const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  // @ts-ignore
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  // const [pageSize, setPageSize] = useState<number>(10);
-
-  // --- DERIVED METADATA ---
-  const uniqueBranches = useMemo(() => {
-    const branches = new Set(records.map(r => r.branch).filter(Boolean));
-    return ['All', ...Array.from(branches)];
-  }, [records]);
-
-  const uniqueTeams = useMemo(() => {
-    const teams = new Set(records.map(r => r.team).filter(Boolean));
-    return ['All', ...Array.from(teams)];
-  }, [records]);
-
-  const uniqueServices = useMemo(() => {
-    const services = new Set(records.map(r => r.service).filter(Boolean));
-    return ['All', ...Array.from(services)];
-  }, [records]);
-
-  const { minDate, maxDate } = useMemo(() => {
-    if (!records.length) return { minDate: '', maxDate: '' };
-    const dates = records.map(r => r.date).sort();
-    return { minDate: dates[0], maxDate: dates[dates.length - 1] };
-  }, [records]);
 
   const availableMonths = useMemo(() => {
     if (!records.length) return [];
@@ -641,12 +852,7 @@ export default function App() {
   const [tempEndDate, setTempEndDate] = useState<string>('');
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
-  const [selectedDetailBranch, setSelectedDetailBranch] = useState<string | null>(null);
-  const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
 
-  useEffect(() => {
-    setExpandedOperator(null);
-  }, [selectedDetailBranch]);
   
   // Left calendar month state (Date object pointing to the first day of that month)
   const [leftCalendarMonth, setLeftCalendarMonth] = useState<Date>(() => {
@@ -1027,6 +1233,72 @@ export default function App() {
     };
   }, [filteredData]);
 
+  // --- PREVIOUS PERIOD METRICS FOR COMPARISON ---
+  const previousPeriodMetrics = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    const prevEnd = new Date(start);
+    prevEnd.setDate(start.getDate() - 1);
+    
+    const prevStart = new Date(prevEnd);
+    prevStart.setDate(prevEnd.getDate() - diffDays + 1);
+    
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    const prevStartStr = formatDate(prevStart);
+    const prevEndStr = formatDate(prevEnd);
+    
+    const prevData = records.filter(r => {
+      if (r.date < prevStartStr || r.date > prevEndStr) return false;
+      if (selectedBranch !== 'All' && r.branch !== selectedBranch) return false;
+      if (selectedTeam !== 'All' && r.team !== selectedTeam) return false;
+      if (selectedService !== 'All' && r.service !== selectedService) return false;
+      return true;
+    });
+    
+    let adsSpend = 0, revenue = 0, leads = 0, showups = 0;
+    prevData.forEach(r => {
+      adsSpend += r.ads_spend;
+      revenue += r.revenue;
+      leads += r.leads;
+      showups += r.showups;
+    });
+
+    const costPerLead = leads > 0 ? adsSpend / leads : 0;
+    const roas = adsSpend > 0 ? revenue / adsSpend : 0;
+    const avgAdsRatio = revenue > 0 ? (adsSpend / revenue) * 100 : 0;
+    
+    return { adsSpend, revenue, leads, showups, costPerLead, roas, avgAdsRatio };
+  }, [records, startDate, endDate, selectedBranch, selectedTeam, selectedService]);
+
+  const getComparisonTag = (current: number, previous: number | undefined, isLowerBetter: boolean = false) => {
+    if (previous === undefined || previous === null || previous === 0) return null;
+    const pct = ((current - previous) / previous) * 100;
+    if (Math.abs(pct) < 0.05) return null;
+    const isIncrease = pct >= 0;
+    const displayPct = `${isIncrease ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%`;
+    
+    let isGood = isIncrease;
+    if (isLowerBetter) isGood = !isIncrease;
+    
+    const className = isGood ? 'comp-tag-good' : 'comp-tag-bad';
+    return (
+      <span className={`kpi-comparison-tag ${className}`}>
+        {displayPct} so với kỳ trước
+      </span>
+    );
+  };
+
   // --- CHART DATA ---
   const trendChartData = useMemo(() => {
     const grouped: { [date: string]: { date: string; adsSpend: number; revenue: number; leads: number } } = {};
@@ -1123,18 +1395,7 @@ export default function App() {
     return new Intl.NumberFormat('vi-VN').format(val);
   };
 
-  // --- BRANCH RANKING ---
-  const branchRanking = useMemo(() => {
-    const grouped: { [b: string]: { name: string; revenue: number; adsSpend: number; leads: number } } = {};
-    filteredData.forEach(r => {
-      const b = r.branch || 'Khác';
-      if (!grouped[b]) grouped[b] = { name: b, revenue: 0, adsSpend: 0, leads: 0 };
-      grouped[b].revenue += r.revenue;
-      grouped[b].adsSpend += r.ads_spend;
-      grouped[b].leads += r.leads;
-    });
-    return Object.values(grouped).sort((a, b) => b.revenue - a.revenue);
-  }, [filteredData]);
+
 
   const serviceRanking = useMemo(() => {
     const grouped: { [s: string]: { name: string; revenue: number; leads: number } } = {};
@@ -1153,6 +1414,235 @@ export default function App() {
   const avgAdsRatio = useMemo(() => {
     return metrics.revenue > 0 ? (metrics.adsSpend / metrics.revenue) * 100 : 0;
   }, [metrics]);
+
+  // --- RENDER BRANCH BOX FOR MAIN VIEW ---
+  const renderBranchBox = (branchName: string) => {
+    const branchRecords = records.filter(r => {
+      if (r.branch !== branchName) return false;
+      if (startDate && r.date < startDate) return false;
+      if (endDate && r.date > endDate) return false;
+      return true;
+    });
+
+    let adsSpend = 0, leads = 0, showups = 0, revenue = 0;
+    branchRecords.forEach(r => {
+      adsSpend += r.ads_spend;
+      leads += r.leads;
+      showups += r.showups;
+      revenue += r.revenue;
+    });
+
+    const activeStart = startDate || minDate;
+    const activeEnd = endDate || maxDate;
+    const targetMonthStr = startDate ? startDate.substring(0, 7) : '2026-05';
+    const target = getBranchTarget(branchName, targetMonthStr, activeStart, activeEnd);
+
+    const completionRate = target.revenue > 0 ? (revenue / target.revenue) * 100 : 0;
+    const remaining = Math.max(0, target.revenue - revenue);
+
+    let completionColor = '#ef4444'; // đỏ
+    if (completionRate >= 89) {
+      completionColor = '#3b82f6'; // xanh dương
+    } else if (completionRate >= 72) {
+      completionColor = '#f97316'; // cam
+    }
+
+    const adsRatio = revenue > 0 ? (adsSpend / revenue) * 100 : 0;
+    const targetAdsRatio = target.revenue > 0 ? (target.adsSpend / target.revenue) * 100 : 0;
+
+    // Service breakdown
+    const serviceMap: Record<string, { service: string, adsSpend: number, revenue: number, leads: number, showups: number }> = {};
+    branchRecords.forEach(r => {
+      const srv = r.service || 'Khác';
+      if (!serviceMap[srv]) {
+        serviceMap[srv] = { service: srv, adsSpend: 0, revenue: 0, leads: 0, showups: 0 };
+      }
+      serviceMap[srv].adsSpend += r.ads_spend;
+      serviceMap[srv].revenue += r.revenue;
+      serviceMap[srv].leads += r.leads;
+      serviceMap[srv].showups += r.showups;
+    });
+    const services = Object.values(serviceMap).sort((a, b) => b.revenue - a.revenue);
+
+    // Staff breakdown
+    const staffMap: Record<string, { name: string, team: string, adsSpend: number, leads: number, revenue: number }> = {};
+    branchRecords.forEach(r => {
+      const op = r.operator || 'Chưa rõ';
+      if (!staffMap[op]) {
+        staffMap[op] = { name: op, team: r.team || 'Chưa rõ', adsSpend: 0, leads: 0, revenue: 0 };
+      }
+      staffMap[op].adsSpend += r.ads_spend;
+      staffMap[op].leads += r.leads;
+      staffMap[op].revenue += r.revenue;
+    });
+    const staffList = Object.values(staffMap).sort((a, b) => b.revenue - a.revenue);
+
+    return (
+      <div className="branch-card" key={branchName}>
+        <div className="branch-card-header">
+          <h2 className="branch-title">🏢 CHI NHÁNH: {branchName.toUpperCase()}</h2>
+          <div className="completion-badge-wrap">
+            <span className="completion-label">Hoàn thành:</span>
+            <span className="completion-value" style={{ color: completionColor }}>
+              {completionRate.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+
+        <div className="branch-summary-table-wrapper">
+          <table className="branch-summary-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>NGÂN SÁCH</th>
+                <th>KHÁCH ĐẾN</th>
+                <th>DOANH SỐ</th>
+                <th>%ADS/DS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="row-target">
+                <td className="row-type"><span className="emoji-icon">🎯</span> Hạn Mức</td>
+                <td>{target.adsSpend > 0 ? formatCurrency(target.adsSpend) : '—'}</td>
+                <td>{target.showups > 0 ? formatNumber(target.showups) : '—'}</td>
+                <td className="font-semibold">{target.revenue > 0 ? formatCurrency(target.revenue) : '—'}</td>
+                <td>{targetAdsRatio > 0 ? `${targetAdsRatio.toFixed(1)}%` : '—'}</td>
+              </tr>
+              <tr className="row-actual">
+                <td className="row-type"><span className="emoji-icon">✅</span> Thực Đạt</td>
+                <td>{formatCurrency(adsSpend)}</td>
+                <td>{formatNumber(showups)}</td>
+                <td className="font-bold c-emerald">{formatCurrency(revenue)}</td>
+                <td className={`font-semibold ${adsRatio > (targetAdsRatio || 25) ? 'c-rose' : 'c-emerald'}`}>{adsRatio.toFixed(2)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="branch-progress-detail">
+          <span>Còn thiếu: <strong className="c-rose">{formatCurrency(remaining)}</strong></span>
+        </div>
+
+        <div className="branch-service-breakdown">
+          <h4 className="breakdown-title">📊 Chi Tiết Theo Dịch Vụ — {branchName}</h4>
+          <table className="breakdown-table">
+            <thead>
+              <tr>
+                <th>Dịch Vụ</th>
+                <th className="text-right">Chi Phí ADS</th>
+                <th className="text-right">Doanh Số</th>
+                <th className="text-right">%ADS/DS</th>
+                <th className="text-right">Số Khách</th>
+                <th className="text-right">CP/Khách</th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map(srv => {
+                const srvAdsRatio = srv.revenue > 0 ? (srv.adsSpend / srv.revenue) * 100 : 0;
+                const cpKhach = srv.showups > 0 ? srv.adsSpend / srv.showups : 0;
+                return (
+                  <tr key={srv.service}>
+                    <td className="srv-name">{srv.service}</td>
+                    <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
+                    <td className="text-right font-mono">{formatCurrency(srv.revenue)}</td>
+                    <td className="text-right font-semibold">{srvAdsRatio > 0 ? `${srvAdsRatio.toFixed(1)}%` : '—'}</td>
+                    <td className="text-right">{formatNumber(srv.showups)}</td>
+                    <td className="text-right font-mono">{cpKhach > 0 ? formatCurrency(cpKhach) : '—'}</td>
+                  </tr>
+                );
+              })}
+              {services.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-4 text-gray-500">Không có dữ liệu dịch vụ</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="branch-staff-breakdown">
+          <h4 className="breakdown-title">👥 Hiệu Suất Từng Nhân Sự — {branchName}</h4>
+          <table className="staff-table">
+            <thead>
+              <tr>
+                <th>Nhân Viên</th>
+                <th>Team</th>
+                <th className="text-right">Chi Ads</th>
+                <th className="text-right">Leads</th>
+                <th className="text-right">Doanh Số</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffList.map(staff => {
+                const opTarget = getOperatorTarget(staff.name, targetMonthStr, activeStart, activeEnd);
+                const formatProgress = (val: number, tgt: number) => {
+                  if (!tgt) return '';
+                  return ` (${((val / tgt) * 100).toFixed(0)}%)`;
+                };
+                return (
+                  <tr key={staff.name}>
+                    <td className="text-left">
+                      <span 
+                        className="staff-clickable-name"
+                        onClick={() => setSelectedOperator({ name: staff.name, branch: branchName, team: staff.team })}
+                      >
+                        {staff.name}
+                      </span>
+                    </td>
+                    <td>{staff.team}</td>
+                    <td className="text-right">
+                      <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
+                      {opTarget.adsSpend > 0 ? (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.6 }}>
+                          Hạn mức: {formatCurrency(opTarget.adsSpend)}
+                          <span className={staff.adsSpend > opTarget.adsSpend ? 'c-rose' : 'c-emerald'} style={{ marginLeft: 4 }}>
+                            {formatProgress(staff.adsSpend, opTarget.adsSpend)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.4 }}>Không hạn mức</div>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <div className="font-semibold c-blue">{formatNumber(staff.leads)}</div>
+                      {opTarget.leads > 0 ? (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.6 }}>
+                          Mục tiêu: {opTarget.leads}
+                          <span className={staff.leads >= opTarget.leads ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4 }}>
+                            {formatProgress(staff.leads, opTarget.leads)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.4 }}>Không mục tiêu</div>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <div className="font-mono font-semibold c-emerald">{formatCurrency(staff.revenue)}</div>
+                      {opTarget.revenue > 0 ? (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.6 }}>
+                          Mục tiêu: {formatCurrency(opTarget.revenue)}
+                          <span className={staff.revenue >= opTarget.revenue ? 'c-emerald' : 'c-rose'} style={{ marginLeft: 4 }}>
+                            {formatProgress(staff.revenue, opTarget.revenue)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="table-sub-info" style={{ fontSize: '10px', opacity: 0.4 }}>Không mục tiêu</div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {staffList.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-4 text-gray-500">Không có dữ liệu nhân sự</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   // --- RENDER LOADER ---
   if (isLoading) {
@@ -1433,6 +1923,7 @@ export default function App() {
             <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : metrics.roas >= 1 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
               ROAS {metrics.roas.toFixed(1)}x
             </span>
+            {getComparisonTag(metrics.revenue, previousPeriodMetrics?.revenue)}
           </div>
         </div>
 
@@ -1448,6 +1939,7 @@ export default function App() {
             <span className={`sub-tag ${avgAdsRatio <= 15 ? 'sub-tag-good' : avgAdsRatio <= 25 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
               {avgAdsRatio.toFixed(1)}% DS
             </span>
+            {getComparisonTag(metrics.adsSpend, previousPeriodMetrics?.adsSpend, true)}
           </div>
         </div>
 
@@ -1465,6 +1957,7 @@ export default function App() {
             <span className={`sub-tag ${metrics.roas >= 2 ? 'sub-tag-good' : metrics.roas >= 1 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
               {metrics.roas >= 2 ? 'Tốt' : metrics.roas >= 1 ? 'Trung bình' : 'Cần cải thiện'}
             </span>
+            {getComparisonTag(metrics.roas, previousPeriodMetrics?.roas)}
           </div>
         </div>
 
@@ -1482,6 +1975,7 @@ export default function App() {
             <span className={`sub-tag ${avgAdsRatio <= 15 ? 'sub-tag-good' : avgAdsRatio <= 25 ? 'sub-tag-warn' : 'sub-tag-bad'}`}>
               {avgAdsRatio <= 15 ? 'Hiệu quả' : avgAdsRatio <= 25 ? 'Cần tối ưu' : 'Cao'}
             </span>
+            {getComparisonTag(avgAdsRatio, previousPeriodMetrics?.avgAdsRatio, true)}
           </div>
         </div>
       </section>
@@ -1496,7 +1990,10 @@ export default function App() {
           <div className="kpi-funnel-body">
             <span className="kpi-funnel-label">Tổng Leads (SĐT)</span>
             <span className="kpi-funnel-value c-blue">{formatNumber(metrics.leads)}</span>
-            <span className="kpi-funnel-sub">Chi phí/Lead: {formatCurrency(metrics.costPerLead)}</span>
+            <span className="kpi-funnel-sub">
+              Chi phí/Lead: {formatCurrency(metrics.costPerLead)}
+              {getComparisonTag(metrics.leads, previousPeriodMetrics?.leads)}
+            </span>
           </div>
         </div>
         <div className="kpi-funnel">
@@ -1504,7 +2001,10 @@ export default function App() {
           <div className="kpi-funnel-body">
             <span className="kpi-funnel-label">Khách Đến (Show-up)</span>
             <span className="kpi-funnel-value c-violet">{formatNumber(metrics.showups)}</span>
-            <span className="kpi-funnel-sub">Tỷ lệ: {metrics.leadToShowupRate.toFixed(1)}% · Cost: {formatCurrency(metrics.costPerShowup)}</span>
+            <span className="kpi-funnel-sub">
+              Tỷ lệ: {metrics.leadToShowupRate.toFixed(1)}% · Cost: {formatCurrency(metrics.costPerShowup)}
+              {getComparisonTag(metrics.showups, previousPeriodMetrics?.showups)}
+            </span>
           </div>
         </div>
         <div className="kpi-funnel">
@@ -1520,35 +2020,17 @@ export default function App() {
       </section>
 
       {/* ══════════════════════════════════════════
-           CEO VIEW — ROW 3: Trend + Branch Ranking
+           CEO VIEW — ROW 3: Branch Grid Direct Layout
       ══════════════════════════════════════════ */}
       {records.length > 0 && (
         <>
           <p className="section-title">Hiệu Suất Chi Nhánh</p>
-          <section className="kpi-grid-funnel" style={{ marginTop: '8px', marginBottom: '24px' }}>
-            {branchRanking.map((item, i) => (
-              <div 
-                key={item.name} 
-                className={`kpi-funnel clickable-branch-row ${selectedDetailBranch === item.name ? 'active-branch' : ''}`}
-                onClick={() => setSelectedDetailBranch(selectedDetailBranch === item.name ? null : item.name)}
-                style={{ cursor: 'pointer' }}
-              >
-                <div className={`kpi-funnel-icon ${i === 0 ? 'icon-amber' : i === 1 ? 'icon-blue' : i === 2 ? 'icon-violet' : 'icon-cyan'}`}>
-                  <span style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: 16 }}>{i + 1}</span>
-                </div>
-                <div className="kpi-funnel-body">
-                  <span className="kpi-funnel-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong>{item.name}</strong>
-                    <span className="view-detail-link">chi tiết →</span>
-                  </span>
-                  <span className="kpi-funnel-value c-emerald">{formatCurrency(item.revenue)}</span>
-                  <span className="kpi-funnel-sub">
-                    Ads: <strong>{formatCurrency(item.adsSpend)}</strong> · SĐT: <strong>{formatNumber(item.leads)}</strong>
-                  </span>
-                </div>
-              </div>
-            ))}
-          </section>
+          <div className="branch-grid">
+            {(selectedBranch !== 'All' 
+              ? [selectedBranch] 
+              : uniqueBranches.filter(b => b !== 'All')
+            ).map(b => renderBranchBox(b))}
+          </div>
 
           <p className="section-title">Xu Hướng Doanh Số & Chi Phí</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
@@ -1666,274 +2148,221 @@ export default function App() {
       {/* ══════════════════════════════════════════
            ACCORDION DRAWER FOR BRANCH DETAILS (Layer 2 & Layer 3)
       ══════════════════════════════════════════ */}
-      {selectedDetailBranch && (() => {
-        const real = (() => {
-          const branchRecords = records.filter(r => {
-            if (r.branch !== selectedDetailBranch) return false;
-            if (startDate && r.date < startDate) return false;
-            if (endDate && r.date > endDate) return false;
-            return true;
-          });
+      {/* ══════════════════════════════════════════
+           OPERATOR DETAIL MODAL (Ảnh 3)
+      ══════════════════════════════════════════ */}
+      {selectedOperator && (() => {
+        const opRecords = records.filter(r => {
+          if (r.operator !== selectedOperator.name) return false;
+          if (r.branch !== selectedOperator.branch) return false;
+          if (startDate && r.date < startDate) return false;
+          if (endDate && r.date > endDate) return false;
+          return true;
+        });
 
-          let adsSpend = 0, leads = 0, showups = 0, revenue = 0;
-          branchRecords.forEach(r => {
-            adsSpend += r.ads_spend;
-            leads += r.leads;
-            showups += r.showups;
-            revenue += r.revenue;
-          });
+        const serviceMap: Record<string, {
+          service: string;
+          adsSpend: number;
+          contacts: number;
+          leads: number;
+          showups: number;
+          revenue: number;
+        }> = {};
 
-          return { adsSpend, leads, showups, revenue, records: branchRecords };
-        })();
+        opRecords.forEach(r => {
+          const srv = r.service || 'Khác';
+          if (!serviceMap[srv]) {
+            serviceMap[srv] = {
+              service: srv,
+              adsSpend: 0,
+              contacts: 0,
+              leads: 0,
+              showups: 0,
+              revenue: 0
+            };
+          }
+          serviceMap[srv].adsSpend += r.ads_spend;
+          serviceMap[srv].contacts += r.contacts;
+          serviceMap[srv].leads += r.leads;
+          serviceMap[srv].showups += r.showups;
+          serviceMap[srv].revenue += r.revenue;
+        });
 
-        const actualStart = startDate || minDate;
-        const actualEnd = endDate || maxDate;
+        const servicesList = Object.values(serviceMap).sort((a, b) => b.revenue - a.revenue);
+
+        let totalSpend = 0;
+        let totalContacts = 0;
+        let totalLeads = 0;
+        let totalShowups = 0;
+        let totalRevenue = 0;
+
+        servicesList.forEach(srv => {
+          totalSpend += srv.adsSpend;
+          totalContacts += srv.contacts;
+          totalLeads += srv.leads;
+          totalShowups += srv.showups;
+          totalRevenue += srv.revenue;
+        });
+
+        const activeStart = startDate || minDate;
+        const activeEnd = endDate || maxDate;
         const targetMonthStr = startDate ? startDate.substring(0, 7) : '2026-05';
-        const target = getBranchTarget(selectedDetailBranch, targetMonthStr, actualStart, actualEnd);
+        const opTarget = getOperatorTarget(selectedOperator.name, targetMonthStr, activeStart, activeEnd);
 
-        const formatPercent = (val: number, base: number) => {
-          if (!base) return '0.0%';
-          return `${((val / base) * 100).toFixed(1)}%`;
+        const completionRate = opTarget.revenue > 0 ? (totalRevenue / opTarget.revenue) * 100 : 0;
+        const remaining = Math.max(0, opTarget.revenue - totalRevenue);
+
+        let completionColor = '#ef4444'; // đỏ
+        if (completionRate >= 89) {
+          completionColor = '#3b82f6'; // xanh dương
+        } else if (completionRate >= 72) {
+          completionColor = '#f97316'; // cam
+        }
+
+        const adsRatio = totalRevenue > 0 ? (totalSpend / totalRevenue) * 100 : 0;
+        const targetAdsRatio = opTarget.revenue > 0 ? (opTarget.adsSpend / opTarget.revenue) * 100 : 0;
+
+        const getInitials = (name: string) => {
+          if (!name) return "";
+          const parts = name.trim().split(/\s+/);
+          if (parts.length >= 2) {
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+          }
+          return name.substring(0, 2).toUpperCase();
         };
 
-        const getProgressWidth = (val: number, base: number) => {
-          if (!base) return '0%';
-          return `${Math.min(100, (val / base) * 100)}%`;
-        };
-
-        const staffData = (() => {
-          const operatorMap: Record<string, { name: string, team: string, service: string, adsSpend: number, leads: number, showups: number, revenue: number }> = {};
-          
-          real.records.forEach(r => {
-            const op = r.operator || 'Chưa rõ';
-            if (!operatorMap[op]) {
-              operatorMap[op] = {
-                name: op,
-                team: r.team || 'Chưa rõ',
-                service: r.service || 'Chưa rõ',
-                adsSpend: 0,
-                leads: 0,
-                showups: 0,
-                revenue: 0
-              };
-            }
-            operatorMap[op].adsSpend += r.ads_spend;
-            operatorMap[op].leads += r.leads;
-            operatorMap[op].showups += r.showups;
-            operatorMap[op].revenue += r.revenue;
-          });
-
-          return Object.values(operatorMap).sort((a, b) => b.revenue - a.revenue);
-        })();
+        const initials = getInitials(selectedOperator.name);
 
         return (
-          <div className="branch-drawer-overlay" onClick={() => setSelectedDetailBranch(null)}>
-            <div className="branch-drawer" onClick={e => e.stopPropagation()}>
-              <div className="drawer-header">
-                <div>
-                  <h2 className="drawer-title">Chi Tiết Chi Nhánh: {selectedDetailBranch}</h2>
-                  <p className="drawer-subtitle">
-                    Tháng mục tiêu: {targetMonthStr.split('-').reverse().join('/')} &nbsp;·&nbsp;&nbsp;
-                    {startDate ? startDate.split('-').reverse().join('/') : ''} - {endDate ? endDate.split('-').reverse().join('/') : ''}
-                  </p>
+          <div className="operator-modal-overlay" onClick={() => setSelectedOperator(null)}>
+            <div className="operator-modal" onClick={e => e.stopPropagation()}>
+              <div className="operator-modal-header">
+                <div className="operator-profile-header">
+                  <div className="operator-avatar-circle">
+                    {initials}
+                  </div>
+                  <div className="operator-header-info">
+                    <h2 className="operator-name">{selectedOperator.name}</h2>
+                    <span className="operator-branch-tag">Chi nhánh: {selectedOperator.branch} · Team: {selectedOperator.team}</span>
+                  </div>
                 </div>
-                <button type="button" className="btn-close-drawer" onClick={() => setSelectedDetailBranch(null)}>×</button>
+                <button type="button" className="btn-close-operator-modal" onClick={() => setSelectedOperator(null)}>×</button>
               </div>
 
-              <div className="drawer-body">
-                {/* Layer 2: Targets & Progress */}
-                <div className="drawer-section">
-                  <h3 className="section-subtitle">Lớp 2: Tiến Độ Mục Tiêu Chi Nhánh</h3>
-                  <div className="progress-grid">
-                    {/* Doanh số */}
-                    <div className="progress-card">
-                      <div className="progress-card-header">
-                        <span className="card-lbl">Doanh Số</span>
-                        <span className={`card-pct ${real.revenue >= target.revenue ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.revenue, target.revenue)}</span>
-                      </div>
-                      <div className="progress-card-bar">
-                        <div className={`progress-bar-fill ${real.revenue >= target.revenue ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.revenue, target.revenue) }} />
-                      </div>
-                      <div className="progress-card-info">
-                        <span>Thực tế: <strong>{formatCurrency(real.revenue)}</strong></span>
-                        <span>Mục tiêu: {formatCurrency(target.revenue)}</span>
-                      </div>
-                    </div>
-
-                    {/* Ngân sách ads */}
-                    <div className="progress-card">
-                      <div className="progress-card-header">
-                        <span className="card-lbl">Chi Ads / Ngân Sách</span>
-                        <span className={`card-pct ${real.adsSpend > target.adsSpend ? 'c-rose' : 'c-emerald'}`}>{formatPercent(real.adsSpend, target.adsSpend)}</span>
-                      </div>
-                      <div className="progress-card-bar">
-                        <div className={`progress-bar-fill ${real.adsSpend > target.adsSpend ? 'fill-rose' : 'fill-emerald'}`} style={{ width: getProgressWidth(real.adsSpend, target.adsSpend) }} />
-                      </div>
-                      <div className="progress-card-info">
-                        <span>Thực tế: <strong>{formatCurrency(real.adsSpend)}</strong></span>
-                        <span>Hạn mức: {formatCurrency(target.adsSpend)}</span>
-                      </div>
-                    </div>
-
-                    {/* Leads */}
-                    <div className="progress-card">
-                      <div className="progress-card-header">
-                        <span className="card-lbl">SĐT (Leads)</span>
-                        <span className={`card-pct ${real.leads >= target.leads ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.leads, target.leads)}</span>
-                      </div>
-                      <div className="progress-card-bar">
-                        <div className={`progress-bar-fill ${real.leads >= target.leads ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.leads, target.leads) }} />
-                      </div>
-                      <div className="progress-card-info">
-                        <span>Thực tế: <strong>{real.leads}</strong></span>
-                        <span>Mục tiêu: {target.leads}</span>
-                      </div>
-                    </div>
-
-                    {/* Show-up */}
-                    <div className="progress-card">
-                      <div className="progress-card-header">
-                        <span className="card-lbl">Khách Đến (Showup)</span>
-                        <span className={`card-pct ${real.showups >= target.showups ? 'c-emerald' : 'c-rose'}`}>{formatPercent(real.showups, target.showups)}</span>
-                      </div>
-                      <div className="progress-card-bar">
-                        <div className={`progress-bar-fill ${real.showups >= target.showups ? 'fill-emerald' : 'fill-rose'}`} style={{ width: getProgressWidth(real.showups, target.showups) }} />
-                      </div>
-                      <div className="progress-card-info">
-                        <span>Thực tế: <strong>{real.showups}</strong></span>
-                        <span>Mục tiêu: {target.showups}</span>
-                      </div>
-                    </div>
-                  </div>
+              <div className="operator-kpi-grid">
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Mục Tiêu Tháng</span>
+                  <span className="operator-kpi-val">{opTarget.revenue > 0 ? formatCurrency(opTarget.revenue) : '—'}</span>
                 </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Doanh Số</span>
+                  <span className="operator-kpi-val c-emerald">{formatCurrency(totalRevenue)}</span>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">% Hoàn Thành</span>
+                  <span className="operator-kpi-val" style={{ color: completionColor }}>
+                    {opTarget.revenue > 0 ? `${completionRate.toFixed(1)}%` : '—'}
+                  </span>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Còn Thiếu</span>
+                  <span className="operator-kpi-val c-rose">{formatCurrency(remaining)}</span>
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">Chi Phí Ads</span>
+                  <span className="operator-kpi-val">{formatCurrency(totalSpend)}</span>
+                  {opTarget.adsSpend > 0 && (
+                    <span style={{ fontSize: '10px', opacity: 0.6 }}>
+                      Hạn mức: {formatCurrency(opTarget.adsSpend)}
+                    </span>
+                  )}
+                </div>
+                <div className="operator-kpi-card">
+                  <span className="operator-kpi-label">%Ads/DS</span>
+                  <span className={`operator-kpi-val ${adsRatio > (targetAdsRatio || 25) ? 'c-rose' : 'c-emerald'}`}>
+                    {adsRatio > 0 ? `${adsRatio.toFixed(2)}%` : '—'}
+                  </span>
+                  {targetAdsRatio > 0 && (
+                    <span style={{ fontSize: '10px', opacity: 0.6 }}>
+                      Hạn mức: {targetAdsRatio.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+              </div>
 
-                {/* Layer 3: Staff details */}
-                <div className="drawer-section staff-section">
-                  <h3 className="section-subtitle">Lớp 3: Hiệu Suất Từng Nhân Sự</h3>
-                  <div className="table-responsive">
-                    <table className="custom-table staff-table">
-                      <thead>
+              <div className="operator-modal-body">
+                <h4 className="operator-table-title">📊 Đo Lường Từng Dịch Vụ</h4>
+                <div className="table-responsive">
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Dịch Vụ</th>
+                        <th className="text-right">Ngân Sách</th>
+                        <th className="text-right">Tương Tác</th>
+                        <th className="text-right">Giá TT</th>
+                        <th className="text-right">SĐT</th>
+                        <th className="text-right">Giá SĐT</th>
+                        <th className="text-right">%SĐT/TT</th>
+                        <th className="text-right">Khách Đến</th>
+                        <th className="text-right">Giá Khách Đến</th>
+                        <th className="text-right">%Khách/TT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {servicesList.map(srv => {
+                        const costPerEngagement = srv.contacts > 0 ? srv.adsSpend / srv.contacts : 0;
+                        const costPerLead = srv.leads > 0 ? srv.adsSpend / srv.leads : 0;
+                        const leadsToEngagement = srv.contacts > 0 ? (srv.leads / srv.contacts) * 100 : 0;
+                        const costPerShowup = srv.showups > 0 ? srv.adsSpend / srv.showups : 0;
+                        const showupsToEngagement = srv.contacts > 0 ? (srv.showups / srv.contacts) * 100 : 0;
+
+                        return (
+                          <tr key={srv.service}>
+                            <td className="font-semibold">{srv.service}</td>
+                            <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
+                            <td className="text-right">{formatNumber(srv.contacts)}</td>
+                            <td className="text-right font-mono text-gray-400">{costPerEngagement > 0 ? formatCurrency(costPerEngagement) : '—'}</td>
+                            <td className="text-right font-semibold c-blue">{formatNumber(srv.leads)}</td>
+                            <td className="text-right font-mono text-gray-400">{costPerLead > 0 ? formatCurrency(costPerLead) : '—'}</td>
+                            <td className="text-right font-semibold c-blue">{leadsToEngagement > 0 ? `${leadsToEngagement.toFixed(1)}%` : '—'}</td>
+                            <td className="text-right font-semibold c-emerald">{formatNumber(srv.showups)}</td>
+                            <td className="text-right font-mono text-gray-400">{costPerShowup > 0 ? formatCurrency(costPerShowup) : '—'}</td>
+                            <td className="text-right font-semibold c-emerald">{showupsToEngagement > 0 ? `${showupsToEngagement.toFixed(1)}%` : '—'}</td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Dòng TỔNG */}
+                      {servicesList.length > 0 && (() => {
+                        const totalCostPerEngagement = totalContacts > 0 ? totalSpend / totalContacts : 0;
+                        const totalCostPerLead = totalLeads > 0 ? totalSpend / totalLeads : 0;
+                        const totalLeadsToEngagement = totalContacts > 0 ? (totalLeads / totalContacts) * 100 : 0;
+                        const totalCostPerShowup = totalShowups > 0 ? totalSpend / totalShowups : 0;
+                        const totalShowupsToEngagement = totalContacts > 0 ? (totalShowups / totalContacts) * 100 : 0;
+
+                        return (
+                          <tr style={{ background: 'rgba(255, 255, 255, 0.05)', fontWeight: 'bold' }}>
+                            <td>TỔNG</td>
+                            <td className="text-right font-mono">{formatCurrency(totalSpend)}</td>
+                            <td className="text-right">{formatNumber(totalContacts)}</td>
+                            <td className="text-right font-mono">{totalCostPerEngagement > 0 ? formatCurrency(totalCostPerEngagement) : '—'}</td>
+                            <td className="text-right c-blue">{formatNumber(totalLeads)}</td>
+                            <td className="text-right font-mono">{totalCostPerLead > 0 ? formatCurrency(totalCostPerLead) : '—'}</td>
+                            <td className="text-right c-blue">{totalLeadsToEngagement > 0 ? `${totalLeadsToEngagement.toFixed(1)}%` : '—'}</td>
+                            <td className="text-right c-emerald">{formatNumber(totalShowups)}</td>
+                            <td className="text-right font-mono">{totalCostPerShowup > 0 ? formatCurrency(totalCostPerShowup) : '—'}</td>
+                            <td className="text-right c-emerald">{totalShowupsToEngagement > 0 ? `${totalShowupsToEngagement.toFixed(1)}%` : '—'}</td>
+                          </tr>
+                        );
+                      })()}
+
+                      {servicesList.length === 0 && (
                         <tr>
-                          <th>Nhân sự</th>
-                          <th>Team</th>
-                          <th className="text-right">Chi Ads</th>
-                          <th className="text-right">Leads</th>
-                          <th className="text-right">Doanh số</th>
+                          <td colSpan={10} className="text-center py-4 text-gray-500">Không có dữ liệu dịch vụ</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {staffData.length > 0 ? staffData.map((staff, idx) => {
-                          const actualStart = startDate || minDate;
-                          const actualEnd = endDate || maxDate;
-                          const target = getOperatorTarget(staff.name, selectedDetailBranch || '', targetMonthStr, actualStart, actualEnd);
-                          const formatProgress = (val: number, tgt: number) => {
-                            if (!tgt) return '';
-                            return ` (${((val / tgt) * 100).toFixed(0)}%)`;
-                          };
-                          const isExpanded = expandedOperator === staff.name;
-                          return (
-                            <Fragment key={idx}>
-                              <tr 
-                                onClick={() => setExpandedOperator(isExpanded ? null : staff.name)}
-                                style={{ cursor: 'pointer' }}
-                                className={isExpanded ? 'expanded-row-active' : ''}
-                              >
-                                <td>
-                                  <span className="operator-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                    {staff.name}
-                                    <span style={{ fontSize: '10px', opacity: 0.5 }}>
-                                      {isExpanded ? '▼' : '▶'}
-                                    </span>
-                                  </span>
-                                </td>
-                                <td>{staff.team}</td>
-                                <td className="text-right">
-                                  <div className="font-mono font-semibold">{formatCurrency(staff.adsSpend)}</div>
-                                  {target.adsSpend > 0 ? (
-                                    <div className="table-sub-info">
-                                      Hạn mức: {formatCurrency(target.adsSpend)}
-                                      <span className={`${staff.adsSpend > target.adsSpend ? 'c-rose' : 'c-emerald'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.adsSpend, target.adsSpend)}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có hạn mức</div>
-                                  )}
-                                </td>
-                                <td className="text-right">
-                                  <div className="font-semibold" style={{ color: 'var(--blue)' }}>{staff.leads}</div>
-                                  {target.leads > 0 ? (
-                                    <div className="table-sub-info">
-                                      Mục tiêu: {target.leads}
-                                      <span className={`${staff.leads >= target.leads ? 'c-emerald' : 'c-rose'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.leads, target.leads)}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
-                                  )}
-                                </td>
-                                <td className="text-right">
-                                  <div className="font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(staff.revenue)}</div>
-                                  {target.revenue > 0 ? (
-                                    <div className="table-sub-info">
-                                      Mục tiêu: {formatCurrency(target.revenue)}
-                                      <span className={`${staff.revenue >= target.revenue ? 'c-emerald' : 'c-rose'} font-semibold`} style={{ marginLeft: 4 }}>{formatProgress(staff.revenue, target.revenue)}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="table-sub-info" style={{ opacity: 0.5 }}>Không có mục tiêu</div>
-                                  )}
-                                </td>
-                              </tr>
-                              {isExpanded && (() => {
-                                const opRecords = real.records.filter(r => (r.operator || 'Chưa rõ') === staff.name);
-                                const serviceBreakdown: Record<string, { service: string, adsSpend: number, leads: number, revenue: number }> = {};
-                                opRecords.forEach(r => {
-                                  const srv = r.service || 'Khác';
-                                  if (!serviceBreakdown[srv]) {
-                                    serviceBreakdown[srv] = { service: srv, adsSpend: 0, leads: 0, revenue: 0 };
-                                  }
-                                  serviceBreakdown[srv].adsSpend += r.ads_spend;
-                                  serviceBreakdown[srv].leads += r.leads;
-                                  serviceBreakdown[srv].revenue += r.revenue;
-                                });
-                                const breakdownList = Object.values(serviceBreakdown).sort((a, b) => b.revenue - a.revenue);
-                                return (
-                                  <tr className="service-breakdown-row" onClick={e => e.stopPropagation()}>
-                                    <td colSpan={5}>
-                                      <div className="service-breakdown-wrapper">
-                                        <div className="service-breakdown-header">
-                                          Chi tiết từng dịch vụ của <strong>{staff.name}</strong>:
-                                        </div>
-                                        <table className="service-breakdown-subtable">
-                                          <thead>
-                                            <tr>
-                                              <th>Dịch vụ</th>
-                                              <th className="text-right">Chi Ads</th>
-                                              <th className="text-right">Leads</th>
-                                              <th className="text-right">Doanh số</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {breakdownList.map((srv, sIdx) => (
-                                              <tr key={sIdx}>
-                                                <td><span className="service-badge">{srv.service}</span></td>
-                                                <td className="text-right font-mono">{formatCurrency(srv.adsSpend)}</td>
-                                                <td className="text-right font-semibold" style={{ color: 'var(--blue)' }}>{srv.leads}</td>
-                                                <td className="text-right font-mono font-semibold" style={{ color: 'var(--emerald)' }}>{formatCurrency(srv.revenue)}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })()}
-                            </Fragment>
-                          );
-                        }) : (
-                          <tr><td colSpan={5} className="table-empty">Không có nhân sự nào.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

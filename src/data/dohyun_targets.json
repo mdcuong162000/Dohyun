@@ -1,0 +1,334 @@
+{
+  "2026-04": {
+    "branches": {
+      "Đà Nẵng": {
+        "revenue": 0.2752007695,
+        "adsSpend": 750000000.0,
+        "leads": 1488,
+        "showups": 400
+      },
+      "Nha Trang": {
+        "revenue": 119999090.0,
+        "adsSpend": 86104876.0,
+        "leads": 111,
+        "showups": 44
+      },
+      "Hồ Chí Minh": {
+        "revenue": 400000000,
+        "adsSpend": 120000000,
+        "leads": 250,
+        "showups": 70
+      },
+      "BMT": {
+        "revenue": 300000000,
+        "adsSpend": 100000000,
+        "leads": 180,
+        "showups": 40
+      }
+    },
+    "operators": {
+      "HUẾ": {
+        "adsSpend": 382500000,
+        "leads": 700,
+        "revenue": 1200000000,
+        "services": {}
+      },
+      "BIN": {
+        "adsSpend": 240000000,
+        "leads": 500,
+        "revenue": 900000000,
+        "services": {}
+      },
+      "NHI": {
+        "adsSpend": 127500000,
+        "leads": 200,
+        "revenue": 380000000,
+        "services": {}
+      }
+    }
+  },
+  "2026-05": {
+    "branches": {
+      "Đà Nẵng": {
+        "revenue": 2643447692.0,
+        "adsSpend": 700000000.0,
+        "leads": 1443,
+        "showups": 388
+      },
+      "Nha Trang": {
+        "revenue": 923505882.4,
+        "adsSpend": 350000000.0,
+        "leads": 571,
+        "showups": 153
+      },
+      "Hồ Chí Minh": {
+        "revenue": 400000000,
+        "adsSpend": 120000000,
+        "leads": 250,
+        "showups": 70
+      },
+      "BMT": {
+        "revenue": 300000000,
+        "adsSpend": 100000000,
+        "leads": 180,
+        "showups": 40
+      }
+    },
+    "operators": {
+      "HUẾ": {
+        "adsSpend": 343000000,
+        "leads": 708,
+        "revenue": 1295727497,
+        "services": {}
+      },
+      "BIN": {
+        "adsSpend": 231000000,
+        "leads": 517,
+        "revenue": 947313231,
+        "services": {}
+      },
+      "NHI": {
+        "adsSpend": 126000000,
+        "leads": 219,
+        "revenue": 400406965,
+        "services": {}
+      },
+      "THẮNG": {
+        "adsSpend": 90322580,
+        "leads": 150,
+        "revenue": 300000000,
+        "services": {}
+      },
+      "HỒNG": {
+        "adsSpend": 10000000,
+        "leads": 20,
+        "revenue": 40000000,
+        "services": {}
+      },
+      "TÀI": {
+        "adsSpend": 10000000,
+        "leads": 20,
+        "revenue": 40000000,
+        "services": {}
+      }
+    }
+  },
+  "2026-06": {
+    "branches": {
+      "Đà Nẵng": {
+        "revenue": 2321910124.0,
+        "adsSpend": 650000000.0,
+        "leads": 1365,
+        "showups": 341
+      },
+      "Nha Trang": {
+        "revenue": 112989453.1,
+        "adsSpend": 524599000.0,
+        "leads": 776,
+        "showups": 638358
+      }
+    },
+    "operators": {
+      "HUẾ": {
+        "adsSpend": 351000000.0,
+        "leads": 737,
+        "revenue": 1332449159.0,
+        "services": {
+          "SẸO": {
+            "adsSpend": 3900000.0,
+            "revenue": 0
+          },
+          "THÂM": {
+            "adsSpend": 4333333.333,
+            "revenue": 0
+          },
+          "TRẺ HÓA": {
+            "adsSpend": 3466666.667,
+            "revenue": 0
+          }
+        }
+      },
+      "BIN": {
+        "adsSpend": 169000000.0,
+        "leads": 355,
+        "revenue": 615083551.7,
+        "services": {
+          "SẸO": {
+            "adsSpend": 2166666.667,
+            "revenue": 0
+          },
+          "TUYẾN MÙI": {
+            "adsSpend": 1300000.0,
+            "revenue": 0
+          },
+          "TRẺ HÓA": {
+            "adsSpend": 1950000.0,
+            "revenue": 0
+          }
+        }
+      },
+      "ĐỨC": {
+        "adsSpend": 130000000.0,
+        "leads": 273,
+        "revenue": 374377413.1,
+        "services": {
+          "SẸO": {
+            "adsSpend": 2600000.0,
+            "revenue": 0
+          },
+          "THÂM": {
+            "adsSpend": 1950000.0,
+            "revenue": 0
+          }
+        }
+      }
+    }
+  },
+  "2026-03": {
+    "branches": {
+      "Đà Nẵng": {
+        "revenue": 586444458.0,
+        "adsSpend": 182045629.0,
+        "leads": 405,
+        "showups": 95
+      },
+      "Nha Trang": {
+        "revenue": 322739931.0,
+        "adsSpend": 117156514.0,
+        "leads": 173,
+        "showups": 47
+      }
+    },
+    "operators": {}
+  },
+  "2026-01": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 155344874.1,
+        "adsSpend": 456858380.0,
+        "leads": 779,
+        "showups": 579645
+      },
+      "Đà Nẵng": {
+        "revenue": 16085180.43,
+        "adsSpend": 323156349.0,
+        "leads": 1314,
+        "showups": 553072
+      }
+    },
+    "operators": {}
+  },
+  "2026-12": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 140554011.3,
+        "adsSpend": 349929000.0,
+        "leads": 860,
+        "showups": 630287
+      },
+      "Đà Nẵng": {
+        "revenue": 18349730.13,
+        "adsSpend": 447577000.0,
+        "leads": 1198,
+        "showups": 558875
+      }
+    },
+    "operators": {}
+  },
+  "2026-11": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 102857609.5,
+        "adsSpend": 317000000.0,
+        "leads": 505,
+        "showups": 1038965
+      },
+      "Đà Nẵng": {
+        "revenue": 18010287.69,
+        "adsSpend": 679728000.0,
+        "leads": 1175,
+        "showups": 559905
+      }
+    },
+    "operators": {}
+  },
+  "2026-10": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 122320492.4,
+        "adsSpend": 440850000.0,
+        "leads": 525,
+        "showups": 933744
+      },
+      "Đà Nẵng": {
+        "revenue": 15222446.08,
+        "adsSpend": 869871000.0,
+        "leads": 1315,
+        "showups": 608897
+      }
+    },
+    "operators": {}
+  },
+  "2026-09": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 137574653.2,
+        "adsSpend": 308091000.0,
+        "leads": 804,
+        "showups": 849226
+      },
+      "Đà Nẵng": {
+        "revenue": 13414642.11,
+        "adsSpend": 366481000.0,
+        "leads": 1332,
+        "showups": 587502
+      }
+    },
+    "operators": {}
+  },
+  "2026-08": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 179714453.8,
+        "adsSpend": 1026130000.0,
+        "leads": 1237,
+        "showups": 739565
+      },
+      "Đà Nẵng": {
+        "revenue": 15701973.61,
+        "adsSpend": 712097000.0,
+        "leads": 1631,
+        "showups": 519073
+      }
+    },
+    "operators": {}
+  },
+  "2026-07": {
+    "branches": {
+      "Nha Trang": {
+        "revenue": 121784523.8,
+        "adsSpend": 565599000.0,
+        "leads": 988,
+        "showups": 522680
+      },
+      "Đà Nẵng": {
+        "revenue": 13907550.96,
+        "adsSpend": 556975000.0,
+        "leads": 1611,
+        "showups": 480952
+      }
+    },
+    "operators": {}
+  },
+  "2026-02": {
+    "branches": {
+      "Đà Nẵng": {
+        "revenue": 0.6200736162,
+        "adsSpend": 58646908.0,
+        "leads": 689963,
+        "showups": 3449818
+      }
+    },
+    "operators": {}
+  }
+}
