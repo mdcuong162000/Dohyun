@@ -680,8 +680,11 @@ export default function App() {
 
   // --- INITIAL DATA LOAD & MERGING OF 4 SHEETS ---
   useEffect(() => {
-    const syncAllData = async () => {
-      setIsLoading(true);
+    const syncAllData = async (isBackground = false) => {
+      if (isDemoMode) return;
+      if (!isBackground) {
+        setIsLoading(true);
+      }
       setAuthError('');
       
       const fetchPublicCSV = async (sheetId: string) => {
@@ -735,7 +738,9 @@ export default function App() {
           });
           setRecords(Array.from(mergedMap.values()));
           setIsDemoMode(false);
-          setIsLoading(false);
+          if (!isBackground) {
+            setIsLoading(false);
+          }
           return;
         }
       } catch (err) {
@@ -791,11 +796,23 @@ export default function App() {
       } else {
         setRecords([]);
       }
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     };
 
     syncAllData();
-  }, [accessToken]);
+
+    // Tự động quét lại sau mỗi 5 phút (300,000ms)
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible' && !isDemoMode) {
+        console.log('[Sync] Tự động cập nhật dữ liệu Google Sheets ngầm (mỗi 5 phút)...');
+        syncAllData(true);
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [accessToken, isDemoMode]);
 
   // Load online targets dynamically on date range / selected month change
   useEffect(() => {
